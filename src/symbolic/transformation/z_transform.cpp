@@ -379,7 +379,7 @@ SymbolicExpression z_transform_impl_uncached(const SymbolicExpression& expressio
         if (rule.matcher && rule.transformer && rule.matcher(simplified, index_variable)) {
             try {
                 return rule.transformer(simplified, index_variable, transform_variable).simplify();
-            } catch (...) {}
+            } catch (const std::exception&) {}
         }
     }
 
@@ -743,7 +743,7 @@ SymbolicExpression inverse_z_transform_impl_uncached(const SymbolicExpression& e
         if (rule.matcher && rule.transformer && rule.matcher(simplified, transform_variable)) {
             try {
                 return rule.transformer(simplified, transform_variable, index_variable).simplify();
-            } catch (...) {}
+            } catch (const std::exception&) {}
         }
     }
 

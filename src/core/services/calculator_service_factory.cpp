@@ -100,7 +100,7 @@ CoreServices build_core_services([[maybe_unused]] Calculator* calculator, Calcul
                 impl->variables_ptr->pop_scope();
                 if (value.is_matrix() || value.is_complex() || value.is_string())
                     throw std::runtime_error("expected a scalar-valued expression");
-                return Calculator::normalize_result(value.exact ? rational_to_double(value.rational) : value.as_scalar());
+                return value.exact ? rational_to_double(value.rational) : value.as_scalar();
             } catch (...) {
                 impl->variables_ptr->pop_scope();
                 throw;
@@ -118,8 +118,8 @@ CoreServices build_core_services([[maybe_unused]] Calculator* calculator, Calcul
             try {
                 const StoredValue val = evaluate_expression_value(impl, scoped_expression, false);
                 impl->variables_ptr->pop_scope();
-                if (!val.is_matrix) throw std::runtime_error("expected a matrix-valued expression");
-                return *val.matrix_ptr;
+                if (!val.is_matrix()) throw std::runtime_error("expected a matrix-valued expression");
+                return *val.get_matrix_ptr();
             } catch (...) {
                 impl->variables_ptr->pop_scope();
                 throw;
@@ -182,7 +182,11 @@ CoreServices build_core_services([[maybe_unused]] Calculator* calculator, Calcul
         impl->functions_ptr->clear_all();
         return std::string("Cleared all custom functions.");
     };
-    s.env.set_exact_mode = [](bool m) { return std::string("Exact mode: ") + (m ? "ON" : "OFF"); };
+    s.env.set_exact_mode = [impl](bool m) {
+        impl->config_ptr->set_exact_mode(m);
+        broadcast_settings(impl->parent, impl);
+        return std::string("Exact mode: ") + (m ? "ON" : "OFF");
+    };
     s.env.set_symbolic_mode = [impl](bool m) { return impl->parent->set_symbolic_constants_mode(m); };
     s.env.set_precision = [impl](int p) { return impl->parent->set_display_precision(p); };
     s.env.set_hex_prefix = [impl](bool m) { return impl->parent->set_hex_prefix_mode(m); };
@@ -195,15 +199,15 @@ CoreServices build_core_services([[maybe_unused]] Calculator* calculator, Calcul
 
     s.is_matrix_argument = [impl](const std::string& arg) {
         try {
-            return static_cast<bool>(evaluate_expression_value(impl, trim_copy(arg), false).is_matrix);
-        } catch (...) {
+            return static_cast<bool>(evaluate_expression_value(impl, trim_copy(arg), false).is_matrix());
+        } catch (const std::exception&) {
             return false;
         }
     };
 
     s.parse_matrix_argument = [impl](const std::string& arg, const std::string& c) {
         const StoredValue value = evaluate_expression_value(impl, arg, false);
-        if (!value.is_matrix) throw std::runtime_error(c + " expects a matrix or vector argument");
+        if (!value.is_matrix()) throw std::runtime_error(c + " expects a matrix or vector argument");
         return value;
     };
 

@@ -218,15 +218,15 @@ std::vector<Scalar> bartlett_window(std::size_t length) {
 
 // 第一类修正贝塞尔函数 I0
 static Scalar bessel_i0_scalar(Scalar x) {
-    // 使用级数展开
+    // 使用级数展开: sum_{k=0}^inf ( (x^2 / 4)^k / (k!)^2 )
     Scalar result = Scalar(1.0L);
     Scalar term = Scalar(1.0L);
-    Scalar x_squared_over_4 = x * x / Scalar(4.0L);
+    const Scalar x_squared_over_4 = x * x / Scalar(4.0L);
 
-    for (int k = 1; k <= 25; ++k) {
-        term *= x_squared_over_4 / Scalar((k * k));
+    for (int k = 1; k <= 150; ++k) {
+        term *= x_squared_over_4 / Scalar(static_cast<long long>(k * k));
         result += term;
-        if (term < Scalar(1e-12L) * result) {
+        if (term < Scalar(1e-25L) * result) {
             break;
         }
     }

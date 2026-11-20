@@ -5,7 +5,7 @@
 
 #include "script_parser.h"
 #include "parser/infra/base_parser.h"
-#include "parser/ast/expression_compiler.h"
+#include "parser/ast/expression_ast.h"
 #include "parser/lexer/lazy_token_stream.h"
 #include "parser/infra/parser_utils.h"
 #include "string_utils.h"

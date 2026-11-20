@@ -103,19 +103,6 @@ StoredValue evaluate_expression_value(IExecutionContext* ctx,
                                       bool exact_mode,
                                       std::shared_ptr<ExpressionCache>* cache = nullptr);
 
-/**
- * @brief 兼容旧接口的求值包装
- * @param ctx 执行上下文
- * @param expression 表达式字符串
- * @param exact_mode 是否精确模式
- * @param cache 缓存指针（旧类型）
- * @return 求值结果
- */
-StoredValue evaluate_expression_value_legacy(IExecutionContext* ctx,
-                                             const std::string& expression,
-                                             bool exact_mode,
-                                             std::shared_ptr<void>* cache);
-
 // ============================================================================
 // 脚本执行
 // ============================================================================

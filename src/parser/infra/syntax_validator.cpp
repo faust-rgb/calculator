@@ -31,7 +31,7 @@ std::vector<SyntaxErrorInfo> SyntaxValidator::validate(std::string_view expressi
         const std::size_t marker_pos = message.find(marker);
         if (marker_pos != std::string::npos) {
             try { position = std::stoull(message.substr(marker_pos + marker.size())); }
-            catch (...) {}
+            catch (const std::exception&) {}
         }
         errors.emplace_back(message, position, Severity::kError);
     }

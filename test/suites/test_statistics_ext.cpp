@@ -2,6 +2,7 @@
 #include "test_helpers.h"
 #include "statistics/probability.h"
 #include "statistics/statistics.h"
+#include "core/api/calculator.h"
 #include "math/mymath.h"
 #include <vector>
 #include <iostream>
@@ -119,6 +120,87 @@ void run_statistics_ext_tests(int& passed, int& failed) {
         } else {
             ++failed;
             std::cout << "    FAIL: Multi-dim matrix statistics test failed" << std::endl;
+        }
+    }
+
+    // 3. Statistics Module Command & Function Integration Tests
+    {
+        Calculator calc;
+        try {
+            // Test describe / stat_summary command
+            std::string desc_out = calc.process_line("describe([1, 2, 3, 4, 5])", false);
+            if (desc_out.find("Statistical Summary") != std::string::npos && desc_out.find("Mean:") != std::string::npos) {
+                ++passed;
+            } else {
+                ++failed;
+                std::cout << "    FAIL: describe([1, 2, 3, 4, 5]) failed: " << desc_out << std::endl;
+            }
+
+            std::string sum_out = calc.process_line("stat_summary([1, 2, 3, 4, 5])", false);
+            if (sum_out.find("Statistical Summary") != std::string::npos) {
+                ++passed;
+            } else {
+                ++failed;
+                std::cout << "    FAIL: stat_summary([1, 2, 3, 4, 5]) failed: " << sum_out << std::endl;
+            }
+
+            // Test geometric_mean / geo_mean
+            std::string gm_out = calc.process_line("geo_mean([1, 2, 4, 8])", false);
+            if (mymath::abs(std::stold(gm_out) - 2.828427L) < 0.001L) {
+                ++passed;
+            } else {
+                ++failed;
+                std::cout << "    FAIL: geo_mean([1, 2, 4, 8]) expected ~2.8284, got " << gm_out << std::endl;
+            }
+
+            // Test harmonic_mean
+            std::string hm_out = calc.process_line("harmonic_mean([1, 2, 4])", false);
+            if (mymath::abs(std::stold(hm_out) - 1.714285L) < 0.001L) {
+                ++passed;
+            } else {
+                ++failed;
+                std::cout << "    FAIL: harmonic_mean([1, 2, 4]) expected ~1.714, got " << hm_out << std::endl;
+            }
+
+            // Test range
+            std::string range_out = calc.process_line("range([3, 1, 9, 2])", false);
+            if (mymath::abs(std::stold(range_out) - 8.0L) < 0.001L) {
+                ++passed;
+            } else {
+                ++failed;
+                std::cout << "    FAIL: range([3, 1, 9, 2]) expected 8, got " << range_out << std::endl;
+            }
+
+            // Test q1 / q3
+            std::string q1_out = calc.process_line("q1([1, 2, 3, 4, 5, 6, 7, 8, 9])", false);
+            std::string q3_out = calc.process_line("q3([1, 2, 3, 4, 5, 6, 7, 8, 9])", false);
+            if (!q1_out.empty() && !q3_out.empty()) {
+                ++passed;
+            } else {
+                ++failed;
+                std::cout << "    FAIL: q1/q3 evaluation failed" << std::endl;
+            }
+
+            // Test zscore
+            std::string z_out = calc.process_line("zscore([10, 20, 30])", false);
+            if (z_out.find("[") != std::string::npos) {
+                ++passed;
+            } else {
+                ++failed;
+                std::cout << "    FAIL: zscore([10, 20, 30]) failed: " << z_out << std::endl;
+            }
+
+            // Test cdf_norm / pdf_norm / pearson
+            std::string cdf_norm_out = calc.process_line("cdf_norm(0)", false);
+            if (mymath::abs(std::stold(cdf_norm_out) - 0.5L) < 0.001L) {
+                ++passed;
+            } else {
+                ++failed;
+                std::cout << "    FAIL: cdf_norm(0) expected 0.5, got " << cdf_norm_out << std::endl;
+            }
+        } catch (const std::exception& e) {
+            ++failed;
+            std::cout << "    FAIL: Statistics module test threw exception: " << e.what() << std::endl;
         }
     }
 

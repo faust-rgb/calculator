@@ -62,7 +62,6 @@ using math::config::kMaxDisplayPrecision;
 // Calculator 实现类
 // ============================================================================
 
-#include "core/services/service_locator.h"
 #include "core/services/core_manager_interfaces.h"
 #include "execution/engine/script_context.h"
 
@@ -82,7 +81,6 @@ using math::config::kMaxDisplayPrecision;
  */
 struct Calculator::Impl : public IExecutionContext {
     Calculator* parent = nullptr;
-    ServiceLocator locator;
     core::ExecutionContext execution_ctx;
 
     // 快捷访问服务接口（延迟初始化）
@@ -108,6 +106,8 @@ struct Calculator::Impl : public IExecutionContext {
     
     ICommandRegistry& commands() override { return *commands_ptr; }
     const ICommandRegistry& commands() const override { return *commands_ptr; }
+
+    IStatePersistence& state_persistence() override { return *persistence; }
     
     const CoreServices& services() const override;
     StoredValue evaluate(const std::string& expression, bool exact_mode) override;
@@ -185,7 +185,8 @@ std::vector<Scalar> solve_dense_linear_system(
     std::vector<Scalar> rhs,
     const std::string& context);
 
-// 模块注册
+// 模块注册与设置广播
 void register_standard_modules(Calculator* calculator);
+void broadcast_settings(Calculator* calculator, Calculator::Impl* impl);
 
 #endif // CORE_CALCULATOR_IMPL_H

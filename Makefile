@@ -4,7 +4,7 @@ OPT_CXXFLAGS ?= -O2 -g
 CXXFLAGS ?= $(BASE_CXXFLAGS) $(OPT_CXXFLAGS)
 LDFLAGS ?=
 BIN_DIR := bin
-BUILD_DIR := build
+BUILD_DIR := build_make
 APP := $(BIN_DIR)/calculator
 TEST_APP := $(BIN_DIR)/calculator_tests
 SRC_DIR := src
@@ -29,7 +29,7 @@ TEST_OBJS := $(patsubst %.cpp,$(BUILD_DIR)/%.o,$(TEST_SRCS))
 # Dependencies
 DEPS := $(MAIN_OBJ:.o=.d) $(TEST_OBJS:.o=.d) $(COMMON_OBJS:.o=.d)
 
-.PHONY: all test script-test check ckeck debug asan ubsan clean
+.PHONY: all test script-test check debug asan ubsan clean
 
 all: $(APP)
 
@@ -56,8 +56,6 @@ script-test: $(APP)
 	test/script/run_symbolic_cli_validation.sh
 
 check: test script-test
-
-ckeck: check
 
 debug:
 	$(MAKE) OPT_CXXFLAGS="-O0 -g"

@@ -15,7 +15,7 @@
 #include "parser/grammars/command_parser.h"
 #include "parser/grammars/exact_evaluator.h"
 #include "parser/ast/expression_ast.h"
-#include "parser/ast/expression_compiler.h"
+#include "parser/ast/expression_ast.h"
 #include "parser/ast/unified_ast.h"
 #include "calculator_exceptions.h"
 #include "execution/resolver/variable_resolver.h"
@@ -97,38 +97,6 @@ UnifiedExpressionParser::UnifiedExpressionParser(
 UnifiedExpressionParser::~UnifiedExpressionParser() = default;
 
 // ============================================================================
-// 缓存回调初始化
-// ============================================================================
-
-void UnifiedExpressionParser::ensure_callbacks_initialized() const {
-    if (callbacks_initialized_) return;
-
-    cached_scalar_evaluator_ = [this](std::string_view text) {
-        return evaluate(std::string(text));
-    };
-
-    cached_matrix_lookup_ = [this](const std::string& name, matrix::Matrix* matrix_value) {
-        const StoredValue* found = variables_.lookup(name);
-        if (!found || !found->is_matrix || !found->matrix_ptr) {
-            return false;
-        }
-        *matrix_value = *found->matrix_ptr;
-        return true;
-    };
-
-    cached_complex_lookup_ = [this](const std::string& name, matrix::ComplexNumber* complex_value) {
-        const StoredValue* found = variables_.lookup(name);
-        if (!found || !found->is_complex) {
-            return false;
-        }
-        *complex_value = found->complex;
-        return true;
-    };
-
-    callbacks_initialized_ = true;
-}
-
-// ============================================================================
 // 特征分析
 // ============================================================================
 
@@ -167,17 +135,17 @@ Rational UnifiedExpressionParser::evaluate_exact(const std::string& expression) 
 bool UnifiedExpressionParser::try_evaluate_value(const std::string& expression, matrix::Value* value) {
     try {
         const StoredValue result = evaluate_stored(expression, false, false);
-        if (result.is_matrix && result.matrix_ptr) {
-            *value = matrix::Value::from_matrix(*result.matrix_ptr);
-        } else if (result.is_complex) {
-            *value = matrix::Value::from_complex(result.complex);
+        if (result.is_matrix() && result.get_matrix_ptr()) {
+            *value = matrix::Value::from_matrix(*result.get_matrix_ptr());
+        } else if (result.is_complex()) {
+            *value = matrix::Value::from_complex(result.get_complex());
         } else if (result.is_scalar()) {
             *value = matrix::Value::from_scalar(result.get_decimal());
         } else {
             return false;
         }
         return true;
-    } catch (...) {
+    } catch (const std::exception&) {
         return false;
     }
 }
@@ -192,17 +160,16 @@ StoredValue UnifiedExpressionParser::evaluate_stored(const std::string& expressi
     // 字符串字面量
     if (hint == ExpressionHint::kStringLiteral) {
         StoredValue stored;
-        stored.is_string = true;
         // 提取引号内的内容
         std::string_view content(expression.data() + 1, expression.size() - 2);
-        stored.string_value = parse_string_literal_content(content);
+        stored.set_string_value(parse_string_literal_content(content));
         return stored;
     }
 
     // 进制转换检测
     std::string converted;
     if (try_base_conversion_expression(expression, variables_, functions_, {false, true}, &converted)) {
-        StoredValue res; res.is_string = true; res.string_value = converted;
+        StoredValue res; res.set_string_value(converted);
         return res;
     }
 
@@ -215,10 +182,11 @@ StoredValue UnifiedExpressionParser::evaluate_stored(const std::string& expressi
         throw UndefinedError("unknown variable: " + expression);
     }
 
-    // 统一 AST 求值路径：矩阵字面量、虚数、下标及其混合运算共享同一棵树。
-    if (!symbolic_mode && (analysis.has_bracket || analysis.has_standalone_i || analysis.has_matrix_func ||
-                           analysis.has_matrix_or_complex_var)) {
-        auto unified_ast = compile(expression);
+    // 统一 AST 求值路径：矩阵字面量、虚数、下标及其混合运算共享同一棵单次编译的 AST。
+    // 即使在 symbolic_mode 下，矩阵与复数表达式也必须走统一 AST，避免落入纯标量求值器报错。
+    if (analysis.has_bracket || analysis.has_standalone_i || analysis.has_matrix_func ||
+        analysis.has_matrix_or_complex_var) {
+        const ExpressionAST* unified_ast = analysis.compiled_ast.get();
         if (unified_ast) {
             // 优先使用绑定的 execution_context_（已通过 bind_function_manager
             // 委托到 IFunctionManager，无需复制函数表）。
@@ -294,7 +262,7 @@ StoredValue UnifiedExpressionParser::evaluate_stored(const std::string& expressi
                             });
                     }
             }
-            return core::evaluate_unified_ast(unified_ast.get(), context);
+            return core::evaluate_unified_ast(unified_ast, context);
         }
     }
 
@@ -310,10 +278,10 @@ StoredValue UnifiedExpressionParser::evaluate_stored(const std::string& expressi
 
             const StoredValue value =
                 evaluate_stored(std::string(call->arguments[0].text), false, symbolic_mode);
-            if (value.is_matrix || value.is_complex) {
+            if (value.is_matrix() || value.is_complex()) {
                 throw std::runtime_error("rat cannot approximate a matrix or complex value");
             }
-            if (value.is_string) {
+            if (value.is_string()) {
                 throw std::runtime_error("rat cannot approximate a string value");
             }
 
@@ -321,8 +289,8 @@ StoredValue UnifiedExpressionParser::evaluate_stored(const std::string& expressi
             if (call->arguments.size() == 2) {
                 const StoredValue max_denominator_value =
                     evaluate_stored(std::string(call->arguments[1].text), false, symbolic_mode);
-                if (max_denominator_value.is_matrix || max_denominator_value.is_complex ||
-                    max_denominator_value.is_string) {
+                if (max_denominator_value.is_matrix() || max_denominator_value.is_complex() ||
+                    max_denominator_value.is_string()) {
                     throw std::runtime_error("rat max_denominator must be a positive integer");
                 }
                 const Scalar scalar = max_denominator_value.get_decimal();
@@ -352,20 +320,24 @@ StoredValue UnifiedExpressionParser::evaluate_stored(const std::string& expressi
         }
     }
 
-    // 精确模式
+    // 精确模式（复用单次编译的 ExpressionAST）
     if (exact_mode) {
         try {
+            if (analysis.compiled_ast) {
+                return StoredValue(evaluate_ast_exact(analysis.compiled_ast.get()));
+            }
             return StoredValue(evaluate_exact(expression));
         } catch (const ExactModeUnsupported&) {
             // 回退到十进制模式
         }
     }
 
-    // 标量求值
+    // 标量求值（复用单次编译的 ExpressionAST）
     try {
-         Scalar value = evaluate(expression);
+        Scalar value = analysis.compiled_ast ? evaluate_ast(analysis.compiled_ast.get())
+                                             : evaluate(expression);
         StoredValue stored;
-        stored.decimal = value;
+        stored.set_decimal(value);
         stored.exact = false;
         return stored;
     } catch (const UndefinedError&) {
@@ -451,20 +423,20 @@ bool try_evaluate_matrix_expression(
     const matrix::MatrixLookup matrix_lookup =
         [&variables](const std::string& name, matrix::Matrix* matrix_value) {
             const StoredValue* found = variables.lookup(name);
-            if (!found || !found->is_matrix || !found->matrix_ptr) {
+            if (!found || !found->is_matrix() || !found->get_matrix_ptr()) {
                 return false;
             }
-            *matrix_value = *found->matrix_ptr;
+            *matrix_value = *found->get_matrix_ptr();
             return true;
         };
 
     const matrix::ComplexLookup complex_lookup =
         [&variables](const std::string& name, matrix::ComplexNumber* complex_value) {
             const StoredValue* found = variables.lookup(name);
-            if (!found || !found->is_complex) {
+            if (!found || !found->is_complex()) {
                 return false;
             }
-            *complex_value = found->complex;
+            *complex_value = found->get_complex();
             return true;
         };
 
@@ -495,7 +467,7 @@ bool try_base_conversion_expression(
     CommandASTNode ast;
     try {
         ast = parse_command(expression);
-    } catch (...) {
+    } catch (const std::exception&) {
         return false;
     }
     const auto* call = ast.as_function_call();

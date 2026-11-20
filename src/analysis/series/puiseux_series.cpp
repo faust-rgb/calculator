@@ -402,7 +402,7 @@ std::string general_series_auto(const SeriesContext& ctx,
         if (val.is_number(&n) && !mymath::isinf(n)) {
             return taylor::taylor(ctx, expression_str, center, degree);
         }
-    } catch (...) {}
+    } catch (const std::exception&) {}
 
     if (expr.node_type() == NodeType::kDivide) {
         SymbolicExpression num = expr.left_child();
@@ -449,7 +449,7 @@ std::string general_series_auto(const SeriesContext& ctx,
                     return "(" + t_str + ") / (" + base + "^" + std::to_string(k) + ")";
                 }
             }
-        } catch (...) {}
+        } catch (const std::exception&) {}
     }
 
     return puiseux(ctx, expression_str, center, degree, 2);

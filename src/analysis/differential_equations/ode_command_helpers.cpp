@@ -10,6 +10,7 @@
 
 #include <algorithm>
 #include <sstream>
+#include <regex>
 
 namespace ode_ops {
 
@@ -44,8 +45,30 @@ std::string order_to_var(int order) {
 // ============================================================================
 
 ODEInfo analyze_ode_expression(const std::string& expr_str) {
+    std::string clean_str = expr_str;
+    auto eq_pos = clean_str.find('=');
+    if (eq_pos != std::string::npos) {
+        std::string lhs_str = clean_str.substr(0, eq_pos);
+        std::string rhs_str = clean_str.substr(eq_pos + 1);
+        clean_str = "(" + lhs_str + ") - (" + rhs_str + ")";
+    }
 
-    SymbolicExpression expr = SymbolicExpression::parse(expr_str);
+    std::string norm_str = clean_str;
+    try {
+        std::regex diff2_re(R"(diff\s*\(\s*y(\s*\(\s*x\s*\))?\s*,\s*x\s*,\s*2(\.0*)?\s*\))");
+        norm_str = std::regex_replace(norm_str, diff2_re, "y''");
+        std::regex diff1_re(R"(diff\s*\(\s*y(\s*\(\s*x\s*\))?(\s*,\s*x)?\s*\))");
+        norm_str = std::regex_replace(norm_str, diff1_re, "y'");
+        std::regex y2_fn_re(R"(y''\s*\(\s*x\s*\))");
+        norm_str = std::regex_replace(norm_str, y2_fn_re, "y''");
+        std::regex y1_fn_re(R"(y'\s*\(\s*x\s*\))");
+        norm_str = std::regex_replace(norm_str, y1_fn_re, "y'");
+        std::regex y0_fn_re(R"(y\s*\(\s*x\s*\))");
+        norm_str = std::regex_replace(norm_str, y0_fn_re, "y");
+    } catch (const std::exception&) {
+    }
+
+    SymbolicExpression expr = SymbolicExpression::parse(norm_str);
     std::vector<std::string> vars = expr.identifier_variables();
     int max_order = 0;
     for (const std::string& v : vars) {
@@ -53,15 +76,15 @@ ODEInfo analyze_ode_expression(const std::string& expr_str) {
     }
 
     ODEInfo info;
-    if (max_order <= 1 && expr_str.find("y'") == std::string::npos) {
+    if (max_order == 0) {
         info.is_high_order = false;
         info.order = 1;
         info.rhs = expr;
         return info;
     }
 
-    info.is_high_order = true;
-    info.order = std::max(1, max_order);
+    info.order = max_order;
+    info.is_high_order = (max_order >= 2);
     const std::string highest_var = order_to_var(info.order);
 
     SymbolicExpression coeff_A = expr.derivative(highest_var).simplify();
@@ -186,19 +209,19 @@ void append_parameter_assignments(
     const StoredValue& parameter_value,
     std::vector<std::pair<std::string, StoredValue>>* assignments) {
     assignments->push_back({"p", parameter_value});
-    if (!parameter_value.is_matrix || !parameter_value.matrix_ptr->is_vector()) {
+    if (!parameter_value.is_matrix() || !parameter_value.get_matrix_ptr()->is_vector()) {
         return;
     }
 
     const std::size_t size =
-        parameter_value.matrix_ptr->rows == 1
-            ? parameter_value.matrix_ptr->cols
-            : parameter_value.matrix_ptr->rows;
+        parameter_value.get_matrix_ptr()->rows == 1
+            ? parameter_value.get_matrix_ptr()->cols
+            : parameter_value.get_matrix_ptr()->rows;
     for (std::size_t i = 0; i < size; ++i) {
         const Scalar component_value =
-            parameter_value.matrix_ptr->rows == 1
-                ? Scalar(parameter_value.matrix_ptr->at(0, i))
-                : Scalar(parameter_value.matrix_ptr->at(i, 0));
+            parameter_value.get_matrix_ptr()->rows == 1
+                ? Scalar(parameter_value.get_matrix_ptr()->at(0, i))
+                : Scalar(parameter_value.get_matrix_ptr()->at(i, 0));
         assignments->push_back({"p" + std::to_string(i + 1),
                                 make_scalar_stored(ctx, component_value)});
     }

@@ -100,7 +100,7 @@ bool extract_general_rational_factorization(
     std::vector<Scalar> roots;
     try {
         roots = polynomial_real_roots(remaining);
-    } catch (...) {
+    } catch (const std::exception&) {
         roots.clear();
     }
 
@@ -210,7 +210,7 @@ bool extract_general_rational_factorization(
 
         trim_coefficients(&remaining);
         if (remaining.size() == 1) return true;
-    } catch (...) {
+    } catch (const std::exception&) {
         // Fall through to the older shape-specific quadratic detector.
     }
 
@@ -861,7 +861,7 @@ bool try_integrate_trig_power_identity(const SymbolicExpression& base,
         return false;
     }
 
-    const SymbolicExpression argument(base.node_->left);
+    const SymbolicExpression argument(base.node_->left ? base.node_->left : (!base.node_->children.empty() ? base.node_->children[0] : nullptr));
     Scalar a = Scalar(0.0L);
     Scalar b = Scalar(0.0L);
     if (!decompose_linear(argument, variable_name, &a, &b) ||
@@ -947,6 +947,84 @@ bool try_integrate_trig_power_identity(const SymbolicExpression& base,
                 .simplify();
         return true;
     }
+    if (mymath::is_near_zero(exponent_value - 3.0, kFormatEps()) &&
+        function_name == "tan") {
+        // int tan^3(u) du = 1/2 tan^2(u) + ln|cos(u)|
+        *integrated =
+            make_divide(
+                make_add(make_multiply(SymbolicExpression::number(0.5L),
+                                       make_power(make_function("tan", argument), SymbolicExpression::number(2.0L))),
+                         make_function("ln", make_function("abs", make_function("cos", argument)))),
+                SymbolicExpression::number(a)).simplify();
+        return true;
+    }
+    if (mymath::is_near_zero(exponent_value - 3.0, kFormatEps()) &&
+        function_name == "cot") {
+        // int cot^3(u) du = -1/2 cot^2(u) - ln|sin(u)|
+        *integrated =
+            make_divide(
+                make_subtract(make_multiply(SymbolicExpression::number(-0.5L),
+                                            make_power(make_function("cot", argument), SymbolicExpression::number(2.0L))),
+                              make_function("ln", make_function("abs", make_function("sin", argument)))),
+                SymbolicExpression::number(a)).simplify();
+        return true;
+    }
+    if (mymath::is_near_zero(exponent_value - 3.0, kFormatEps()) &&
+        function_name == "sec") {
+        // int sec^3(u) du = 1/2 (sec(u)tan(u) + ln|sec(u) + tan(u)|)
+        const SymbolicExpression term1 = make_multiply(make_function("sec", argument), make_function("tan", argument));
+        const SymbolicExpression term2 = make_function("ln", make_function("abs", make_add(make_function("sec", argument), make_function("tan", argument))));
+        *integrated = make_divide(make_multiply(SymbolicExpression::number(0.5L), make_add(term1, term2)),
+                                  SymbolicExpression::number(a)).simplify();
+        return true;
+    }
+    if (mymath::is_near_zero(exponent_value - 3.0, kFormatEps()) &&
+        function_name == "csc") {
+        // int csc^3(u) du = 1/2 (-csc(u)cot(u) + ln|csc(u) - cot(u)|)
+        const SymbolicExpression term1 = make_negate(make_multiply(make_function("csc", argument), make_function("cot", argument)));
+        const SymbolicExpression term2 = make_function("ln", make_function("abs", make_subtract(make_function("csc", argument), make_function("cot", argument))));
+        *integrated = make_divide(make_multiply(SymbolicExpression::number(0.5L), make_add(term1, term2)),
+                                  SymbolicExpression::number(a)).simplify();
+        return true;
+    }
+    if (mymath::is_near_zero(exponent_value - 4.0, kFormatEps()) &&
+        function_name == "sin") {
+        // int sin^4(ax+b) dx = 3/8 x - sin(2(ax+b))/(4a) + sin(4(ax+b))/(32a)
+        const SymbolicExpression arg2 = make_multiply(SymbolicExpression::number(2.0L), argument).simplify();
+        const SymbolicExpression arg4 = make_multiply(SymbolicExpression::number(4.0L), argument).simplify();
+        *integrated = make_add(
+            make_subtract(make_multiply(SymbolicExpression::number(0.375L), x),
+                          make_divide(make_function("sin", arg2), SymbolicExpression::number(4.0L * a))),
+            make_divide(make_function("sin", arg4), SymbolicExpression::number(32.0L * a))).simplify();
+        return true;
+    }
+    if (mymath::is_near_zero(exponent_value - 4.0, kFormatEps()) &&
+        function_name == "cos") {
+        // int cos^4(ax+b) dx = 3/8 x + sin(2(ax+b))/(4a) + sin(4(ax+b))/(32a)
+        const SymbolicExpression arg2 = make_multiply(SymbolicExpression::number(2.0L), argument).simplify();
+        const SymbolicExpression arg4 = make_multiply(SymbolicExpression::number(4.0L), argument).simplify();
+        *integrated = make_add(
+            make_add(make_multiply(SymbolicExpression::number(0.375L), x),
+                     make_divide(make_function("sin", arg2), SymbolicExpression::number(4.0L * a))),
+            make_divide(make_function("sin", arg4), SymbolicExpression::number(32.0L * a))).simplify();
+        return true;
+    }
+    if (mymath::is_near_zero(exponent_value - 4.0, kFormatEps()) &&
+        function_name == "sec") {
+        // int sec^4(u) du = tan(u) + 1/3 tan^3(u)
+        const SymbolicExpression tan_u = make_function("tan", argument);
+        const SymbolicExpression tan3_u = make_multiply(SymbolicExpression::number(1.0L / 3.0L), make_power(tan_u, SymbolicExpression::number(3.0L)));
+        *integrated = make_divide(make_add(tan_u, tan3_u), SymbolicExpression::number(a)).simplify();
+        return true;
+    }
+    if (mymath::is_near_zero(exponent_value - 4.0, kFormatEps()) &&
+        function_name == "csc") {
+        // int csc^4(u) du = -cot(u) - 1/3 cot^3(u)
+        const SymbolicExpression cot_u = make_function("cot", argument);
+        const SymbolicExpression cot3_u = make_multiply(SymbolicExpression::number(1.0L / 3.0L), make_power(cot_u, SymbolicExpression::number(3.0L)));
+        *integrated = make_divide(make_negate(make_add(cot_u, cot3_u)), SymbolicExpression::number(a)).simplify();
+        return true;
+    }
     return false;
 }
 
@@ -1007,12 +1085,12 @@ bool try_integrate_by_parts(const SymbolicExpression& left,
     SymbolicExpression v;
     try {
         v = dv.integral(variable_name);
-    } catch (...) {
+    } catch (const std::exception&) {
         u = (u.node_ == left.node_) ? right : left;
         dv = (dv.node_ == right.node_) ? left : right;
         try {
             v = dv.integral(variable_name);
-        } catch (...) {
+        } catch (const std::exception&) {
             return false;
         }
     }
@@ -1040,7 +1118,7 @@ bool try_integrate_by_parts(const SymbolicExpression& left,
                           .simplify();
         ibp_stack.pop_back();
         return true;
-    } catch (...) {
+    } catch (const std::exception&) {
         ibp_stack.pop_back();
     }
 
@@ -1083,12 +1161,12 @@ bool try_integrate_by_parts(const SymbolicExpression& left,
                         return true;
                     }
                 }
-            } catch (...) {}
+            } catch (const std::exception&) {}
         }
 
         ibp_stack.pop_back();
         return false;
-    } catch (...) {
+    } catch (const std::exception&) {
         ibp_stack.pop_back();
         return false;
     }
@@ -1108,26 +1186,84 @@ bool try_integrate_trig_product_identity(const SymbolicExpression& left,
         right.node_->type != NodeType::kFunction) {
         return false;
     }
-    if (!same_simplified_expression(SymbolicExpression(left.node_->left),
-                                    SymbolicExpression(right.node_->left))) {
+    const std::string& f1 = left.node_->text;
+    const std::string& f2 = right.node_->text;
+    if ((f1 != "sin" && f1 != "cos") || (f2 != "sin" && f2 != "cos")) {
         return false;
     }
 
-    const SymbolicExpression argument(left.node_->left);
-    Scalar a = Scalar(0.0L);
-    Scalar b = Scalar(0.0L);
-    if (!decompose_linear(argument, variable_name, &a, &b) ||
-        mymath::is_near_zero(a, kFormatEps())) {
+    const SymbolicExpression argument(left.node_->left ? left.node_->left : (!left.node_->children.empty() ? left.node_->children[0] : nullptr));
+    const SymbolicExpression arg2(right.node_->left ? right.node_->left : (!right.node_->children.empty() ? right.node_->children[0] : nullptr));
+
+    if (same_simplified_expression(argument, arg2)) {
+        Scalar a = Scalar(0.0L);
+        Scalar b = Scalar(0.0L);
+        if (!decompose_linear(argument, variable_name, &a, &b) ||
+            mymath::is_near_zero(a, kFormatEps())) {
+            return false;
+        }
+
+        if ((f1 == "sin" && f2 == "cos") ||
+            (f1 == "cos" && f2 == "sin")) {
+            *integrated =
+                make_divide(make_power(make_function("sin", argument),
+                                       SymbolicExpression::number(2.0)),
+                            SymbolicExpression::number(2.0 * a))
+                    .simplify();
+            return true;
+        }
         return false;
     }
 
-    if ((left.node_->text == "sin" && right.node_->text == "cos") ||
-        (left.node_->text == "cos" && right.node_->text == "sin")) {
-        *integrated =
-            make_divide(make_power(make_function("sin", argument),
-                                   SymbolicExpression::number(2.0)),
-                        SymbolicExpression::number(2.0 * a))
-                .simplify();
+    Scalar a1 = Scalar(0.0L), b1 = Scalar(0.0L);
+    Scalar a2 = Scalar(0.0L), b2 = Scalar(0.0L);
+    if (!decompose_linear(argument, variable_name, &a1, &b1) ||
+        !decompose_linear(arg2, variable_name, &a2, &b2)) {
+        return false;
+    }
+    if (mymath::is_near_zero(a1, kFormatEps()) && mymath::is_near_zero(a2, kFormatEps())) {
+        return false;
+    }
+
+    auto integrate_linear_trig = [&](const std::string& fn, const SymbolicExpression& arg) -> SymbolicExpression {
+        Scalar ca = Scalar(0.0L), cb = Scalar(0.0L);
+        decompose_linear(arg, variable_name, &ca, &cb);
+        if (mymath::is_near_zero(ca, kFormatEps())) {
+            return make_multiply(make_function(fn, arg), SymbolicExpression::variable(variable_name)).simplify();
+        }
+        if (fn == "sin") {
+            return make_divide(make_negate(make_function("cos", arg)), SymbolicExpression::number(ca)).simplify();
+        } else {
+            return make_divide(make_function("sin", arg), SymbolicExpression::number(ca)).simplify();
+        }
+    };
+
+    const SymbolicExpression sum_arg = make_add(argument, arg2).simplify();
+    const SymbolicExpression diff_arg = make_subtract(argument, arg2).simplify();
+
+    if (f1 == "sin" && f2 == "cos") {
+        const SymbolicExpression int_sum = integrate_linear_trig("sin", sum_arg);
+        const SymbolicExpression int_diff = integrate_linear_trig("sin", diff_arg);
+        *integrated = make_multiply(SymbolicExpression::number(0.5L), make_add(int_sum, int_diff)).simplify();
+        return true;
+    }
+    if (f1 == "cos" && f2 == "sin") {
+        const SymbolicExpression int_sum = integrate_linear_trig("sin", sum_arg);
+        const SymbolicExpression diff_arg2 = make_subtract(arg2, argument).simplify();
+        const SymbolicExpression int_diff = integrate_linear_trig("sin", diff_arg2);
+        *integrated = make_multiply(SymbolicExpression::number(0.5L), make_add(int_sum, int_diff)).simplify();
+        return true;
+    }
+    if (f1 == "cos" && f2 == "cos") {
+        const SymbolicExpression int_diff = integrate_linear_trig("cos", diff_arg);
+        const SymbolicExpression int_sum = integrate_linear_trig("cos", sum_arg);
+        *integrated = make_multiply(SymbolicExpression::number(0.5L), make_add(int_diff, int_sum)).simplify();
+        return true;
+    }
+    if (f1 == "sin" && f2 == "sin") {
+        const SymbolicExpression int_diff = integrate_linear_trig("cos", diff_arg);
+        const SymbolicExpression int_sum = integrate_linear_trig("cos", sum_arg);
+        *integrated = make_multiply(SymbolicExpression::number(0.5L), make_subtract(int_diff, int_sum)).simplify();
         return true;
     }
     return false;

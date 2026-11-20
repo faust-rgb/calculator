@@ -169,33 +169,6 @@ SymbolicProperty symbolic_property(const SymbolicExpression& expression) {
  */
 bool is_known_positive_expression(const SymbolicExpression& expression) {
     return symbolic_property(expression) == SymbolicProperty::kPositive;
-#if 0
-    Scalar numeric = Scalar(0.0L);
-    if (expression.is_number(&numeric)) {
-        return numeric > 0.0L;
-    }
-
-    const auto& node = expression.node_;
-    if (node->type == NodeType::kPi || node->type == NodeType::kE) {
-        return true;
-    }
-    if (node->type == NodeType::kVariable) {
-        return symbolic_assumptions::AssumptionEngine::instance().has_assumption(
-            node->text, symbolic_assumptions::Assumption::kPositive);
-    }
-    // sqrt(x), abs(x), x^even and cosh(x) are only non-negative (or need a
-    // real-domain proof), not unconditionally strictly positive. Keep them
-    // out of the positive predicate; callers that need non-zero must use an
-    // explicit assumption or a dedicated non-zero proof.
-    if (node->type == NodeType::kFunction) {
-        if (node->text == "exp") return true;
-        if (node->text == "sqrt" && node->left) {
-            Scalar radicand = Scalar(0);
-            if (SymbolicExpression(node->left).is_number(&radicand) && radicand > Scalar(0)) return true;
-        }
-    }
-    return false;
-#endif
 }
 
 /**
@@ -209,36 +182,6 @@ bool is_known_positive_expression(const SymbolicExpression& expression) {
  */
 bool is_known_negative_expression(const SymbolicExpression& expression) {
     return symbolic_property(expression) == SymbolicProperty::kNegative;
-#if 0
-    Scalar numeric = Scalar(0.0L);
-    if (expression.is_number(&numeric)) {
-        return numeric < 0.0L;
-    }
-
-    const auto& node = expression.node_;
-    if (node->type == NodeType::kVariable) {
-        return symbolic_assumptions::AssumptionEngine::instance().has_assumption(
-            node->text, symbolic_assumptions::Assumption::kNegative);
-    }
-    // Negation of a positive expression
-    if (node->type == NodeType::kNegate) {
-        return is_known_positive_expression(SymbolicExpression(node->left));
-    }
-    // -1 * positive = negative
-    if (node->type == NodeType::kMultiply) {
-        SymbolicExpression left(node->left);
-        SymbolicExpression right(node->right);
-        Scalar left_val = Scalar(0.0L);
-        if (left.is_number(&left_val) && left_val < 0.0L && is_known_positive_expression(right)) {
-            return true;
-        }
-        Scalar right_val = Scalar(0.0L);
-        if (right.is_number(&right_val) && right_val < 0.0L && is_known_positive_expression(left)) {
-            return true;
-        }
-    }
-    return false;
-#endif
 }
 
 /**
@@ -490,7 +433,7 @@ bool decompose_power_factor_expression(const SymbolicExpression& expression,
         return true;
     }
     if (expression.node_->type == NodeType::kFunction && expression.node_->text == "exp") {
-        *base = SymbolicExpression::variable("e");
+        *base = SymbolicExpression(make_unary(NodeType::kE, nullptr));
         *exponent = SymbolicExpression(expression.node_->left);
         return true;
     }

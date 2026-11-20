@@ -161,35 +161,11 @@ std::vector<Scalar> circular_convolve(const std::vector<Scalar>& signal1,
 
 std::vector<Scalar> xcorr(const std::vector<Scalar>& signal1,
                            const std::vector<Scalar>& signal2) {
-    const std::size_t n = signal1.size();
-    const std::size_t m = signal2.size();
-    if (n == 0 || m == 0) return {};
+    if (signal1.empty() || signal2.empty()) return {};
 
-    const std::size_t out_len = n + m - 1;
-    const std::size_t fft_len = next_power_of_two(out_len);
-
-    std::vector<Scalar> x1(fft_len, 0.0L);
-    std::vector<Scalar> x2(fft_len, 0.0L);
-    std::copy(signal1.begin(), signal1.end(), x1.begin());
-    std::copy(signal2.begin(), signal2.end(), x2.begin());
-
-    std::vector<Complex> X1 = rfft(x1);
-    std::vector<Complex> X2 = rfft(x2);
-
-    // 互相关：X1 * conj(X2) - use Scalar for precision
-    for (std::size_t i = 0; i < X1.size(); ++i) {
-        const Scalar re1(X1[i].real()), im1(X1[i].imag());
-        const Scalar re2(X2[i].real()), im2(X2[i].imag());
-        // conj(X2) = re2 - im2*i
-        // (re1 + im1*i) * (re2 - im2*i) = (re1*re2 + im1*im2) + (im1*re2 - re1*im2)*i
-        const Scalar new_re = re1 * re2 + im1 * im2;
-        const Scalar new_im = im1 * re2 - re1 * im2;
-        X1[i] = Complex((new_re), (new_im));
-    }
-
-    std::vector<Scalar> result = irfft(X1, fft_len);
-    result.resize(out_len);
-    return result;
+    // 标准互相关定义: r_xy[k] = sum_n x[n] y[n-k] = convolve(signal1, reverse(signal2))
+    std::vector<Scalar> s2_rev(signal2.rbegin(), signal2.rend());
+    return convolve(signal1, s2_rev);
 }
 
 // ============================================================================

@@ -32,27 +32,27 @@ void assign_visible_variable(IExecutionContext* ctx,
 }
 
 bool truthy_value(const StoredValue& value) {
-    if (value.is_matrix) {
+    if (value.is_matrix()) {
         throw std::runtime_error("matrix values cannot be used as script conditions");
     }
-    if (value.is_complex) {
+    if (value.is_complex()) {
         throw std::runtime_error("complex values cannot be used as script conditions");
     }
-    if (value.is_string) {
-        return !value.string_value.empty();
+    if (value.is_string()) {
+        return !value.get_string_value().empty();
     }
-    if (value.is_list) {
-        return value.list_value && !value.list_value->empty();
+    if (value.is_list()) {
+        return value.get_list_value() && !value.get_list_value()->empty();
     }
-    if (value.is_dict) {
-        return value.dict_value && !value.dict_value->empty();
+    if (value.is_dict()) {
+        return value.get_dict_value() && !value.get_dict_value()->empty();
     }
     return !mymath::is_near_zero(value.get_decimal(), 1e-10);
 }
 
 Scalar evaluate_scalar( IExecutionContext* ctx, const CommandASTNode& ast, const char* context) {
     StoredValue val = evaluate_command_ast_to_value(ctx, ast, false);
-    if (val.is_matrix || val.is_complex || val.is_string) {
+    if (val.is_matrix() || val.is_complex() || val.is_string()) {
         throw std::runtime_error(std::string(context) + " must be a scalar");
     }
     return val.get_decimal();
@@ -127,7 +127,7 @@ std::size_t find_top_level_assignment(std::string_view text) {
 }
 
 long long stored_to_index(const StoredValue& value, const char* context) {
-    if (value.is_matrix || value.is_complex || value.is_string || value.is_list || value.is_dict) {
+    if (value.is_matrix() || value.is_complex() || value.is_string() || value.is_list() || value.is_dict()) {
         throw std::runtime_error(std::string(context) + " must be an integer");
     }
     const Scalar scalar = value.get_decimal();
@@ -138,8 +138,8 @@ long long stored_to_index(const StoredValue& value, const char* context) {
 }
 
 std::string stored_to_key(const StoredValue& value) {
-    if (value.is_string) return value.string_value;
-    if (value.is_matrix || value.is_complex || value.is_list || value.is_dict) {
+    if (value.is_string()) return value.get_string_value();
+    if (value.is_matrix() || value.is_complex() || value.is_list() || value.is_dict()) {
         throw std::runtime_error("dictionary key must be a string or scalar");
     }
     return value.exact ? value.rational.to_string() : format_stored_value(value, false);

@@ -27,6 +27,7 @@
 #include "symbolic/modules/symbolic_module.h"
 #include "symbolic/modules/transform_module.h"
 #include "time/time_module.h"
+#include "units/units_module.h"
 
 void register_standard_modules(Calculator* calculator) {
     if (!calculator) return;
@@ -56,6 +57,7 @@ void register_standard_modules(Calculator* calculator) {
     register_builtin([]() { return std::make_shared<series_ops::SeriesModule>(); });
     register_builtin([]() { return std::make_shared<PlotModule>(); });
     register_builtin([]() { return std::make_shared<TimeModule>(); });
+    register_builtin([]() { return std::make_shared<units::UnitsModule>(); });
     register_builtin([]() { return std::make_shared<IoModule>(); });
     register_builtin([]() { return std::make_shared<SystemModule>(); });
 }

@@ -86,7 +86,7 @@ public:
      */
     std::string execute_args(const std::string& command,
                              const std::vector<std::string>& args,
-                             ServiceLocator& locator) override;
+                             ModuleServices& module_services) override;
 
     /**
      * @brief 获取帮助信息片段

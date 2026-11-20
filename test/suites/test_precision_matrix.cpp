@@ -303,6 +303,12 @@ void test_performance_comparison(int& passed, int& failed) {
 
     std::cout << "    Performance: 20x20 matrix operations took " << duration.count() << " ms" << std::endl;
 
+    if (!(cond > Scalar(0)) || !mymath::isfinite(det) || QR.rows != A.rows) {
+        std::cout << "    FAIL: Performance test sanity check failed" << std::endl;
+        ++failed;
+        return;
+    }
+
     // 验证结果正确性
     Matrix I = Matrix::identity(20);
     Scalar inv_error = Scalar(0);

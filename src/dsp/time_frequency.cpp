@@ -47,7 +47,7 @@ std::vector<Scalar> periodogram(const std::vector<Scalar>& signal, Scalar sample
         const Scalar re(spectrum[i].real());
         const Scalar im(spectrum[i].imag());
         const Scalar norm_val = re * re + im * im;
-        psd[i] = (scale * norm_val / Scalar(static_cast<long long>(n)));
+        psd[i] = (scale * norm_val);
     }
 
     // 处理 DC 和 Nyquist (不需要乘2)

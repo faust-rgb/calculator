@@ -170,7 +170,7 @@ std::optional<SymbolicExpression> SymbolicSumEngine::sum(
             return result.value;
         }
         return std::nullopt;
-    } catch (...) {
+    } catch (const std::exception&) {
         return std::nullopt;
     }
 }
@@ -731,7 +731,7 @@ bool parse_sum_arguments(
         }
 
         return true;
-    } catch (...) {
+    } catch (const std::exception&) {
         return false;
     }
 }

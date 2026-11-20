@@ -19,34 +19,6 @@ namespace mymath {
 
 // Forward declarations of functions used in this file
 // These are defined in math/numeric/scalar/core/ and math/functions/elementary/
-#if 0
-long double abs(long double x);
-Scalar abs(Scalar x);
-long double sqrt(long double x);
-Scalar sqrt(Scalar x);
-long double atan2(long double y, long double x);
-Scalar atan2(Scalar y, Scalar x);
-long double sin(long double x);
-Scalar sin(Scalar x);
-long double cos(long double x);
-Scalar cos(Scalar x);
-long double tan(long double x);
-Scalar tan(Scalar x);
-long double sinh(long double x);
-Scalar sinh(Scalar x);
-long double cosh(long double x);
-Scalar cosh(Scalar x);
-long double exp(long double x);
-Scalar exp(Scalar x);
-long double ln(long double x);
-Scalar ln(Scalar x);
-bool isnan(long double x);
-bool isnan(Scalar x);
-bool isinf(long double x);
-bool isinf(Scalar x);
-long double infinity();
-long double quiet_nan();
-#endif
 // Helper to check if a type is arithmetic or float128_t
 template <typename T>
 struct is_numeric : std::is_arithmetic<T> {};

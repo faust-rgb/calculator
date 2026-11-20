@@ -235,11 +235,11 @@ StoredValue IndexAccessNode::evaluate(ExecutionContext& ctx) const {
     StoredValue base = parts_[0]->evaluate(ctx);
     if (parts_.size() == 2 && parts_[1]->type() == ASTNodeType::kSlice) {
         const StoredValue bounds = parts_[1]->evaluate(ctx);
-        if (!base.is_list() || !bounds.is_list() || !bounds.list_value || bounds.list_value->size() != 3) {
+        if (!base.is_list() || !bounds.is_list() || !bounds.get_list_value() || bounds.get_list_value()->size() != 3) {
             throw std::runtime_error("slice access requires a list");
         }
-        const auto& list = *base.list_value;
-        const auto& b = *bounds.list_value;
+        const auto& list = *base.get_list_value();
+        const auto& b = *bounds.get_list_value();
         auto bound = [&](const StoredValue& value, long long fallback) {
             if (value.is_nil()) return fallback;
             if (!value.is_scalar() || mymath::floor(value.get_decimal()) != value.get_decimal())
@@ -265,16 +265,16 @@ StoredValue IndexAccessNode::evaluate(ExecutionContext& ctx) const {
         if (!index_value.is_scalar() || mymath::floor(index_value.get_decimal()) != index_value.get_decimal())
             throw std::runtime_error("list index must be an integer");
         long long index = static_cast<long long>(index_value.get_decimal());
-        if (index < 0) index += static_cast<long long>(base.list_value->size());
-        if (index < 0 || index >= static_cast<long long>(base.list_value->size())) throw std::runtime_error("list index out of range");
-        return (*base.list_value)[static_cast<std::size_t>(index)];
+        if (index < 0) index += static_cast<long long>(base.get_list_value()->size());
+        if (index < 0 || index >= static_cast<long long>(base.get_list_value()->size())) throw std::runtime_error("list index out of range");
+        return (*base.get_list_value())[static_cast<std::size_t>(index)];
     }
     if (parts_.size() == 2 && base.is_dict()) {
         const StoredValue key = parts_[1]->evaluate(ctx);
         const std::string key_text = key.is_string() ? key.as_string() :
             std::to_string(static_cast<double>(key.get_decimal()));
-        const auto it = base.dict_value->find(key_text);
-        if (it == base.dict_value->end()) throw std::runtime_error("dictionary key not found: " + key_text);
+        const auto it = base.get_dict_value()->find(key_text);
+        if (it == base.get_dict_value()->end()) throw std::runtime_error("dictionary key not found: " + key_text);
         return it->second;
     }
     if (!base.is_matrix()) throw std::runtime_error("index access requires a matrix");
@@ -340,8 +340,7 @@ StoredValue SliceNode::evaluate(ExecutionContext& ctx) const {
     slice_tuple.push_back(step_v);
 
     StoredValue res;
-    res.is_list = true;
-    res.list_value = std::make_shared<std::vector<StoredValue>>(std::move(slice_tuple));
+    res.set_list_value(std::make_shared<std::vector<StoredValue>>(std::move(slice_tuple)));
     return res;
 }
 
@@ -417,7 +416,6 @@ std::unique_ptr<ASTNode> build_unified_ast(const ExpressionAST* ast) {
                 build_unified_ast(ast->children[1].get()),
                 build_unified_ast(ast->children[2].get()));
         }
-        break;
         break;
     case ExprKind::kFunctionCall: {
         std::vector<std::unique_ptr<ASTNode>> args;

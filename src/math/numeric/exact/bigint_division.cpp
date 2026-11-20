@@ -114,7 +114,12 @@ BigIntData reciprocal_newton(const BigIntData& d, std::size_t precision_chunks) 
         d_high = static_cast<uint64_t>(d[0]) * kBase;
     }
 
-    uint64_t x0_val = (d_high > 0) ? ((static_cast<uint64_t>(kBase) * kBase * kBase) / d_high) : 1;
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wpedantic"
+    unsigned __int128 base128 = kBase;
+    unsigned __int128 num128 = base128 * base128 * base128;
+    uint64_t x0_val = (d_high > 0) ? static_cast<uint64_t>(num128 / d_high) : 1;
+#pragma GCC diagnostic pop
     if (x0_val == 0) x0_val = 1;
 
     BigIntData x = {
@@ -351,6 +356,7 @@ void div_bigint(const BigIntData& num,
     }
 
     BigIntData q(n - m + 1, 0);
+    std::vector<uint32_t> prod(m + 1, 0);
 
     for (int j = static_cast<int>(n - m); j >= 0; --j) {
         uint64_t numerator_val = static_cast<uint64_t>(u[j + m]) * kBase + u[j + m - 1];
@@ -367,13 +373,26 @@ void div_bigint(const BigIntData& num,
             if (r_hat >= kBase) break;
         }
 
-        BigIntData window(u.begin() + j, u.begin() + j + static_cast<std::ptrdiff_t>(m + 1));
-        while (window.size() > 1 && window.back() == 0) window.pop_back();
+        size_t prod_len = mul_uint32_raw(v.data(), m, static_cast<uint32_t>(q_hat), prod.data());
+        while (true) {
+            size_t win_len = m + 1;
+            while (win_len > 1 && u[j + win_len - 1] == 0) --win_len;
+            while (prod_len > 1 && prod[prod_len - 1] == 0) --prod_len;
 
-        BigIntData product = multiply_bigint_by_uint32(v, static_cast<uint32_t>(q_hat));
-        while (compare_bigint(product, window) > 0) {
+            bool prod_greater = false;
+            if (prod_len != win_len) {
+                prod_greater = (prod_len > win_len);
+            } else {
+                for (int k = static_cast<int>(prod_len) - 1; k >= 0; --k) {
+                    if (prod[k] != u[j + k]) {
+                        prod_greater = (prod[k] > u[j + k]);
+                        break;
+                    }
+                }
+            }
+            if (!prod_greater) break;
             --q_hat;
-            product = multiply_bigint_by_uint32(v, static_cast<uint32_t>(q_hat));
+            prod_len = mul_uint32_raw(v.data(), m, static_cast<uint32_t>(q_hat), prod.data());
         }
 
         q[j] = static_cast<uint32_t>(q_hat);
@@ -381,7 +400,7 @@ void div_bigint(const BigIntData& num,
         uint64_t borrow = 0;
         for (std::size_t i = 0; i < m + 1; ++i) {
             uint64_t subtrahend = borrow;
-            if (i < product.size()) subtrahend += product[i];
+            if (i < prod_len) subtrahend += prod[i];
 
             if (static_cast<uint64_t>(u[j + i]) >= subtrahend) {
                 u[j + i] = static_cast<uint32_t>(static_cast<uint64_t>(u[j + i]) - subtrahend);

@@ -10,7 +10,6 @@
 
 #include "analysis/modules/optimization_module.h"
 #include "core/services/core_manager_interfaces.h"
-#include "core/services/service_locator.h"
 
 #include "types/scalar_type.h"
 #include "math/mymath.h"
@@ -272,13 +271,13 @@ bool handle_optimization_command(const OptimizationContext& ctx,
 
 std::string OptimizationModule::execute_args(const std::string& command,
                                             const std::vector<std::string>& args,
-                                            ServiceLocator& locator) {
-    auto services = locator.resolve<CoreServices>();
+                                            ModuleServices& module_services) {
+    auto* services = &module_services.core;
 
     OptimizationContext ctx;
     ctx.parse_matrix_argument = [services](const std::string& arg, const std::string& cmd) -> matrix::Matrix {
         auto val = services->parse_matrix_argument(arg, cmd);
-        return val.matrix_ptr ? *val.matrix_ptr : matrix::Matrix();
+        return val.get_matrix_ptr() ? *val.get_matrix_ptr() : matrix::Matrix();
     };
     ctx.normalize_result = [services](Scalar value) { return services->evaluation.normalize_result(value); };
     ctx.is_integer_double = [](Scalar a, Scalar b) { (void)b; return mymath::is_integer(a); };

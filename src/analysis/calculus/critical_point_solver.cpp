@@ -114,7 +114,7 @@ std::vector<Scalar> find_univariate_critical_points(
     auto eval_second = [&](Scalar x) -> Scalar {
         try {
             return evaluate_ast_node(second_deriv.node_, {{variable, x}});
-        } catch (...) {
+        } catch (const std::exception&) {
             return Scalar(0);
         }
     };
@@ -135,7 +135,7 @@ std::vector<Scalar> find_univariate_critical_points(
         Scalar previous_value = Scalar(0);
         try {
             previous_value = eval_derivative(previous_x);
-        } catch (...) {
+        } catch (const std::exception&) {
             continue;
         }
 
@@ -144,7 +144,7 @@ std::vector<Scalar> find_univariate_critical_points(
             Scalar current_value = Scalar(0);
             try {
                 current_value = eval_derivative(current_x);
-            } catch (...) {
+            } catch (const std::exception&) {
                 previous_x = current_x;
                 continue;
             }
@@ -161,7 +161,7 @@ std::vector<Scalar> find_univariate_critical_points(
                     Scalar mid_value = Scalar(0);
                     try {
                         mid_value = eval_derivative(mid);
-                    } catch (...) {
+                    } catch (const std::exception&) {
                         break;
                     }
 
@@ -193,7 +193,7 @@ std::vector<Scalar> find_univariate_critical_points(
             try {
                 deriv_val = eval_derivative(x);
                 second_val = eval_second(x);
-            } catch (...) {
+            } catch (const std::exception&) {
                 continue;
             }
 
@@ -207,7 +207,7 @@ std::vector<Scalar> find_univariate_critical_points(
                     try {
                         f_prime = eval_derivative(refined_x);
                         f_double_prime = eval_second(refined_x);
-                    } catch (...) {
+                    } catch (const std::exception&) {
                         break;
                     }
 
@@ -224,7 +224,7 @@ std::vector<Scalar> find_univariate_critical_points(
                         mymath::abs(eval_second(refined_x)) > precision::sqrt_epsilon<Scalar>()) {
                         add_point(refined_x);
                     }
-                } catch (...) {
+                } catch (const std::exception&) {
                 }
             }
         }
@@ -349,7 +349,7 @@ std::vector<std::map<std::string, Scalar>> find_multivariate_critical_points(
                     }
                 }
             }
-        } catch (...) {
+        } catch (const std::exception&) {
             // Groebner 基计算失败，继续使用其他方法
         }
     }
@@ -434,7 +434,7 @@ std::vector<std::map<std::string, Scalar>> find_multivariate_critical_points(
                     for (size_t col = 0; col < variables.size(); ++col) {
                         try {
                             jac[row][col] = evaluate_ast_node(symbolic_hessian[row][col].node_, current);
-                        } catch (...) {
+                        } catch (const std::exception&) {
                             eval_ok = false;
                             break;
                         }
@@ -453,7 +453,7 @@ std::vector<std::map<std::string, Scalar>> find_multivariate_critical_points(
                         delta = solve_linear_system_damped(jac, rhs, lambda);
                         solved = true;
                         break;
-                    } catch (...) {
+                    } catch (const std::exception&) {
                         lambda *= Scalar(10.0L);
                     }
                 }

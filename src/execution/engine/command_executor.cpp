@@ -158,12 +158,11 @@ StoredValue evaluate_command_ast_to_value(
     }
     if (ast.kind == CommandKind::kStringLiteral) {
         StoredValue value;
-        value.is_string = true;
-        value.string_value = *ast.as_string_literal();
+        value.set_string_value(*ast.as_string_literal());
         return value;
     }
     std::string out = execute_command_ast(ctx, ast, exact_mode);
-    StoredValue res; res.is_string = true; res.string_value = out;
+    StoredValue res; res.set_string_value(out);
     return res;
 }
 

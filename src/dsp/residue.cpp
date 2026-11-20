@@ -12,7 +12,6 @@
  */
 
 #include "residue.h"
-#include "core/services/service_locator.h"
 #include "core/services/core_manager_interfaces.h"
 #include "parser/grammars/unified_expression_parser.h"
 #include "core/services/string_utils.h"
@@ -31,9 +30,9 @@ namespace dsp_ops {
 
 std::string handle_residue_command(const std::string& command,
                                    const std::vector<std::string>& arguments,
-                                   ServiceLocator& locator) {
+                                   ModuleServices& module_services) {
     (void)command;
-    auto services = locator.resolve<CoreServices>();
+    auto* services = &module_services.core;
     if (arguments.size() != 3) {
         throw DimensionError("residue(expression, variable, point) expects 3 arguments");
     }
@@ -65,20 +64,21 @@ std::string handle_residue_command(const std::string& command,
 
     StoredValue point_value = services->evaluation.evaluate_value(arguments[2], false);
 
-    mymath::complex<Scalar> point(point_value.get_decimal(), 0.0L);
-    if (point_value.is_matrix && point_value.matrix_ptr) {
-        const matrix::Matrix& point_matrix = *point_value.matrix_ptr;
+    mymath::complex<Scalar> point(0.0L, 0.0L);
+    if (point_value.is_matrix_type() && point_value.get_matrix_ptr()) {
+        const matrix::Matrix& point_matrix = *point_value.get_matrix_ptr();
         if (!point_matrix.is_vector() ||
             point_matrix.rows * point_matrix.cols != 2) {
             throw DimensionError("residue point must be scalar or complex(real, imag)");
         }
-        const Scalar real = point_matrix.rows == 1 ? point_matrix.at(0, 0)
-                                                   : point_matrix.at(0, 0);
+        const Scalar real = point_matrix.at(0, 0);
         const Scalar imag = point_matrix.rows == 1 ? point_matrix.at(0, 1)
                                                    : point_matrix.at(1, 0);
         point = mymath::complex<Scalar>(real, imag);
-    } else if (point_value.is_complex) {
-        point = point_value.complex;
+    } else if (point_value.is_complex_type()) {
+        point = point_value.get_complex();
+    } else {
+        point = mymath::complex<Scalar>(point_value.get_decimal(), 0.0L);
     }
 
     auto evaluate_polynomial_complex =

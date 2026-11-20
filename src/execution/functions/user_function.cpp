@@ -39,7 +39,7 @@ std::shared_ptr<ExpressionAST> CustomFunction::get_or_compile_ast() const {
         if (ast) {
             cached_ast = std::move(ast);
         }
-    } catch (...) {
+    } catch (const std::exception&) {
         // 编译失败，保持 cached_ast 为空
         // 函数调用时将回退到字符串解释执行
     }

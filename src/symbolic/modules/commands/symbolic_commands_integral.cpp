@@ -24,6 +24,7 @@
 #include "types/scalar_type.h"
 #include "math/mymath.h"
 #include "parser/grammars/unified_expression_parser.h"
+#include "polynomial/polynomial.h"
 #include <vector>
 #include <limits>
 
@@ -73,6 +74,33 @@ int parse_subdivisions(const SymbolicCommandContext& ctx,
 std::string format_symbolic_numeric(const SymbolicCommandContext& ctx, Scalar value) {
     return format_decimal(ctx.normalize_result(static_cast<double>(value)));
 }
+bool is_integrand_continuous_on_interval(const SymbolicExpression& integrand,
+                                         const std::string& var_name,
+                                         Scalar a,
+                                         Scalar b) {
+    if (a > b) std::swap(a, b);
+    if (integrand.node_->type == NodeType::kDivide) {
+        SymbolicExpression den(integrand.node_->right);
+        std::vector<Scalar> den_coeffs;
+        if (polynomial_coefficients_from_simplified(den.simplify(), var_name, &den_coeffs)) {
+            while (!den_coeffs.empty() && mymath::is_near_zero(den_coeffs.back(), Scalar(1e-12L))) {
+                den_coeffs.pop_back();
+            }
+            if (den_coeffs.size() >= 2) {
+                try {
+                    std::vector<Scalar> roots = polynomial_real_roots(den_coeffs);
+                    for (Scalar r : roots) {
+                        if (r >= a - 1e-9L && r <= b + 1e-9L) {
+                            return false;
+                        }
+                    }
+                } catch (const std::exception&) {}
+            }
+        }
+    }
+    return true;
+}
+
 bool try_symbolic_definite_integral(const SymbolicCommandContext& ctx,
                                      const std::string& expr_str,
                                      const std::string& var_name,
@@ -88,6 +116,16 @@ bool try_symbolic_definite_integral(const SymbolicCommandContext& ctx,
         SymbolicExpression bound_a = SymbolicExpression::parse(a_str);
         SymbolicExpression bound_b = SymbolicExpression::parse(b_str);
 
+        Scalar a_num, b_num;
+        bool a_is_num = bound_a.is_number(&a_num);
+        bool b_is_num = bound_b.is_number(&b_num);
+
+        if (a_is_num && b_is_num) {
+            if (!is_integrand_continuous_on_interval(integrand, resolved_var, a_num, b_num)) {
+                return false;
+            }
+        }
+
         IntegrationEngine engine(10);
         IntegrationResult int_res = engine.integrate(integrand, resolved_var);
         SymbolicExpression antideriv;
@@ -96,7 +134,7 @@ bool try_symbolic_definite_integral(const SymbolicCommandContext& ctx,
         } else {
             try {
                 antideriv = integrand.integral(resolved_var);
-            } catch (...) {
+            } catch (const std::exception&) {
                 auto risch = RischAlgorithm::integrate_full(integrand, resolved_var);
                 if (risch.success && risch.type == IntegralType::kElementary) {
                     antideriv = risch.value;
@@ -110,22 +148,43 @@ bool try_symbolic_definite_integral(const SymbolicCommandContext& ctx,
         SymbolicExpression fa = antideriv.substitute(resolved_var, bound_a).simplify();
         SymbolicExpression diff = (fb - fa).simplify();
 
+        auto is_inf_bound_str = [](const std::string& s) {
+            const std::string t = trim_copy(s);
+            return t == "inf" || t == "+inf" || t == "-inf" ||
+                   t == "infinity" || t == "+infinity" || t == "-infinity";
+        };
+        const bool a_is_inf = is_inf_bound_str(a_str);
+        const bool b_is_inf = is_inf_bound_str(b_str);
+
         Scalar val = Scalar(0.0L);
         if (diff.is_number(&val)) {
             *output = format_symbolic_numeric(ctx, val);
             return true;
         }
 
-        Scalar a_num, b_num;
-        bool a_is_num = bound_a.is_number(&a_num);
-        bool b_is_num = bound_b.is_number(&b_num);
+        // 若上下限均为数值或 ±inf（广义数值积分），尝试将符号结果数值化；
+        // 若结果仍含未消去的 inf 或无法求值，则回退到数值积分。
+        if ((a_is_num || a_is_inf) && (b_is_num || b_is_inf)) {
+            const std::string diff_str = diff.to_string();
+            if (diff_str.find("inf") == std::string::npos) {
+                try {
+                    const Scalar numeric_val = ctx.parse_decimal(diff_str);
+                    if (mymath::isfinite(numeric_val)) {
+                        *output = format_symbolic_numeric(ctx, numeric_val);
+                        return true;
+                    }
+                } catch (const std::exception&) {}
+            }
+            return false;
+        }
+
         if (!a_is_num || !b_is_num) {
             *output = diff.to_string();
             return true;
         }
 
         return false;
-    } catch (...) {
+    } catch (const std::exception&) {
         return false;
     }
 }
@@ -198,15 +257,19 @@ bool handle_integral_commands(const SymbolicCommandContext& ctx,
                     source_text.find("sqrt") != std::string::npos ||
                     source_text.find("ln") != std::string::npos ||
                     source_text.find("sin") != std::string::npos ||
-                    source_text.find("cos") != std::string::npos;
+                    source_text.find("cos") != std::string::npos ||
+                    source_text.find("tan") != std::string::npos ||
+                    source_text.find("sec") != std::string::npos ||
+                    source_text.find("csc") != std::string::npos ||
+                    source_text.find("cot") != std::string::npos;
                 const bool direct_radical_rule =
                     direct_special_rule &&
                     candidate.to_string().find("t1") == std::string::npos;
-                if ((verified && direct_special_rule) || direct_radical_rule) {
+                if ((verified && direct_special_rule) || direct_radical_rule || verified) {
                     res = candidate;
                     direct_ok = true;
                 }
-            } catch (...) {
+            } catch (const std::exception&) {
             }
             if (!direct_ok) {
                 IntegrationResult int_res = engine.integrate(res, var);
@@ -224,7 +287,7 @@ bool handle_integral_commands(const SymbolicCommandContext& ctx,
                         throw std::runtime_error("unverified symbolic integral");
                     }
                     res = candidate;
-                } catch (...) {
+                } catch (const std::exception&) {
                     auto risch = RischAlgorithm::integrate_full(res, var);
                     if (risch.success && risch.type == IntegralType::kElementary) {
                         res = risch.value.simplify();

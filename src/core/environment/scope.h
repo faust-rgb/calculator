@@ -66,20 +66,15 @@ struct FlatScopeStack {
         std::size_t start = scope_starts.back();
         scope_starts.pop_back();
 
-        // 如果使用哈希查找，需要清理索引
-        if (use_hash_lookup_) {
-            for (std::size_t i = start; i < slots.size(); ++i) {
-                name_index_.erase(slots[i].name);
-            }
-        }
-
         slots.resize(start);
         --current_scope_level;
 
-        // 检查是否可以切换回线性查找
-        if (use_hash_lookup_ && slots.size() < kHybridLookupThreshold) {
+        // 检查是否可以切换回线性查找，或重建哈希索引（正确恢复被内层遮蔽的变量）
+        if (slots.size() < kHybridLookupThreshold) {
             use_hash_lookup_ = false;
             name_index_.clear();
+        } else if (use_hash_lookup_) {
+            rebuild_index();
         }
     }
 

@@ -68,11 +68,10 @@ SymbolicExpression derivative_uncached(const SymbolicExpression& expression,
         case NodeType::kPower: {
             const SymbolicExpression base(node_->left);
             const SymbolicExpression exponent(node_->right);
-            Scalar exponent_value = Scalar(0.0L);
-            if (exponent.is_number(&exponent_value)) {
+            if (exponent.is_constant(variable_name)) {
                 return make_multiply(
-                           make_multiply(SymbolicExpression::number(exponent_value),
-                                         make_power(base, SymbolicExpression::number(exponent_value - 1.0L))),
+                           make_multiply(exponent,
+                                         make_power(base, make_subtract(exponent, SymbolicExpression::number(1.0L)))),
                            base.derivative(variable_name))
                     .simplify();
             }
@@ -91,24 +90,94 @@ SymbolicExpression derivative_uncached(const SymbolicExpression& expression,
                 .simplify();
         }
         case NodeType::kFunction: {
-            if (node_->text == "besselj" && node_->children.size() >= 2) {
+            if ((node_->text == "besselj" || node_->text == "bessely" ||
+                 node_->text == "besseli" || node_->text == "besselk") &&
+                node_->children.size() >= 2) {
                 const SymbolicExpression order(node_->children[0]);
                 const SymbolicExpression argument(node_->children[1]);
                 if (!order.is_constant(variable_name)) {
                     throw std::runtime_error(
-                        "symbolic derivative does not support variable-order besselj");
+                        "symbolic derivative does not support variable-order " + node_->text);
                 }
                 const SymbolicExpression inner = argument.derivative(variable_name);
+                Scalar order_val = Scalar(0.0L);
+                if (order.is_number(&order_val) && mymath::is_near_zero(order_val)) {
+                    const SymbolicExpression first = SymbolicExpression::function(
+                        node_->text, std::vector<SymbolicExpression>{SymbolicExpression::number(1.0L), argument});
+                    if (node_->text == "besseli") {
+                        return make_multiply(first, inner).simplify();
+                    } else {
+                        return make_multiply(make_negate(first), inner).simplify();
+                    }
+                }
                 const SymbolicExpression lower = SymbolicExpression::function(
-                    "besselj", std::vector<SymbolicExpression>{
+                    node_->text, std::vector<SymbolicExpression>{
                         (order - SymbolicExpression::number(1.0L)).simplify(), argument});
                 const SymbolicExpression upper = SymbolicExpression::function(
-                    "besselj", std::vector<SymbolicExpression>{
+                    node_->text, std::vector<SymbolicExpression>{
                         (order + SymbolicExpression::number(1.0L)).simplify(), argument});
-                return make_multiply(
-                    make_multiply(SymbolicExpression::number(0.5L),
-                                  make_subtract(lower, upper)),
-                    inner).simplify();
+                if (node_->text == "besselj" || node_->text == "bessely") {
+                    return make_multiply(
+                        make_multiply(SymbolicExpression::number(0.5L),
+                                      make_subtract(lower, upper)),
+                        inner).simplify();
+                } else if (node_->text == "besseli") {
+                    return make_multiply(
+                        make_multiply(SymbolicExpression::number(0.5L),
+                                      make_add(lower, upper)),
+                        inner).simplify();
+                } else { // besselk
+                    return make_multiply(
+                        make_multiply(SymbolicExpression::number(-0.5L),
+                                      make_add(lower, upper)),
+                        inner).simplify();
+                }
+            }
+            if (node_->text == "polygamma" && node_->children.size() >= 2) {
+                const SymbolicExpression order(node_->children[0]);
+                const SymbolicExpression argument(node_->children[1]);
+                if (!order.is_constant(variable_name)) {
+                    throw std::runtime_error("symbolic derivative does not support variable-order polygamma");
+                }
+                const SymbolicExpression inner = argument.derivative(variable_name);
+                const SymbolicExpression next_order = (order + SymbolicExpression::number(1.0L)).simplify();
+                const SymbolicExpression next_poly = SymbolicExpression::function(
+                    "polygamma", std::vector<SymbolicExpression>{next_order, argument});
+                return make_multiply(next_poly, inner).simplify();
+            }
+            if (node_->text == "atan2" && node_->children.size() >= 2) {
+                const SymbolicExpression y(node_->children[0]);
+                const SymbolicExpression x(node_->children[1]);
+                const SymbolicExpression dy = y.derivative(variable_name);
+                const SymbolicExpression dx = x.derivative(variable_name);
+                const SymbolicExpression denom = make_add(make_power(x, SymbolicExpression::number(2.0L)),
+                                                          make_power(y, SymbolicExpression::number(2.0L)));
+                const SymbolicExpression numer = make_subtract(make_multiply(x, dy), make_multiply(y, dx));
+                return make_divide(numer, denom).simplify();
+            }
+            if ((node_->text == "min" || node_->text == "max") && node_->children.size() >= 2) {
+                const SymbolicExpression u(node_->children[0]);
+                const SymbolicExpression v(node_->children[1]);
+                const SymbolicExpression du = u.derivative(variable_name);
+                const SymbolicExpression dv = v.derivative(variable_name);
+                if (node_->text == "min") {
+                    return make_add(make_multiply(du, make_function("step", make_subtract(v, u))),
+                                    make_multiply(dv, make_function("step", make_subtract(u, v)))).simplify();
+                } else {
+                    return make_add(make_multiply(du, make_function("step", make_subtract(u, v))),
+                                    make_multiply(dv, make_function("step", make_subtract(v, u)))).simplify();
+                }
+            }
+            if (node_->text == "pow" && node_->children.size() >= 2) {
+                const SymbolicExpression base(node_->children[0]);
+                const SymbolicExpression exponent(node_->children[1]);
+                return make_power(base, exponent).derivative(variable_name).simplify();
+            }
+            if (node_->text == "log" && node_->children.size() >= 2) {
+                // log(b, x) = ln(x) / ln(b)
+                const SymbolicExpression base(node_->children[0]);
+                const SymbolicExpression arg(node_->children[1]);
+                return make_divide(make_function("ln", arg), make_function("ln", base)).derivative(variable_name).simplify();
             }
             if (node_->children.size() > 1) {
                 if (node_->text == "Integral" && node_->children.size() >= 2) {
@@ -299,24 +368,49 @@ SymbolicExpression derivative_uncached(const SymbolicExpression& expression,
                            inner)
                     .simplify();
             }
-            if (node_->text == "step") {
+            if (node_->text == "step" || node_->text == "heaviside" || node_->text == "Heaviside") {
                 return make_multiply(make_function("delta", argument), inner).simplify();
             }
             if (node_->text == "gamma") {
                 // d/dx gamma(x) = gamma(x) * digamma(x)
                 return make_multiply(make_multiply(expression, make_function("digamma", argument)), inner).simplify();
             }
-            if (node_->text == "erf") {
-                // d/dx erf(x) = 2/sqrt(pi) * exp(-x^2)
-                const SymbolicExpression pi_val(make_unary(NodeType::kPi, nullptr));
-                const SymbolicExpression factor = make_divide(SymbolicExpression::number(2.0), make_function("sqrt", pi_val));
-                const SymbolicExpression exp_part = make_function("exp", make_negate(make_power(argument, SymbolicExpression::number(2.0))));
-                return make_multiply(make_multiply(factor, exp_part), inner).simplify();
+            if (node_->text == "digamma") {
+                // d/dx digamma(x) = polygamma(1, x)
+                const SymbolicExpression poly = SymbolicExpression::function(
+                    "polygamma", std::vector<SymbolicExpression>{SymbolicExpression::number(1.0L), argument});
+                return make_multiply(poly, inner).simplify();
+            }
+            if (node_->text == "lambertw" || node_->text == "LambertW") {
+                // d/dx W(x) = W(x) / (x * (1 + W(x)))
+                const SymbolicExpression denom = make_multiply(argument, make_add(SymbolicExpression::number(1.0L), expression));
+                return make_multiply(make_divide(expression, denom), inner).simplify();
+            }
+            if (node_->text == "sinc") {
+                // d/dx sinc(x) = (cos(x) - sinc(x)) / x
+                const SymbolicExpression numer = make_subtract(make_function("cos", argument), expression);
+                return make_multiply(make_divide(numer, argument), inner).simplify();
             }
             if (node_->text == "besselj") {
-                // d/dx J_n(x) = 0.5 * (J_{n-1}(x) - J_{n+1}(x))
-                // Simplified for J_0: d/dx J_0(x) = -J_1(x)
-                return make_multiply(make_negate(make_function("besselj1", argument)), inner).simplify();
+                // d/dx J_0(x) = -J_1(x)
+                const SymbolicExpression j1 = SymbolicExpression::function(
+                    "besselj", std::vector<SymbolicExpression>{SymbolicExpression::number(1.0L), argument});
+                return make_multiply(make_negate(j1), inner).simplify();
+            }
+            if (node_->text == "bessely") {
+                const SymbolicExpression y1 = SymbolicExpression::function(
+                    "bessely", std::vector<SymbolicExpression>{SymbolicExpression::number(1.0L), argument});
+                return make_multiply(make_negate(y1), inner).simplify();
+            }
+            if (node_->text == "besseli") {
+                const SymbolicExpression i1 = SymbolicExpression::function(
+                    "besseli", std::vector<SymbolicExpression>{SymbolicExpression::number(1.0L), argument});
+                return make_multiply(i1, inner).simplify();
+            }
+            if (node_->text == "besselk") {
+                const SymbolicExpression k1 = SymbolicExpression::function(
+                    "besselk", std::vector<SymbolicExpression>{SymbolicExpression::number(1.0L), argument});
+                return make_multiply(make_negate(k1), inner).simplify();
             }
             throw std::runtime_error("symbolic derivative does not support function: " + node_->text);
         }

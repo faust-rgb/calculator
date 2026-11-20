@@ -86,19 +86,6 @@ std::string format_decimal_truncated(Scalar value, int precision) {
     }
     return trim_trailing_fraction_zeros(result);
 }
-#if 0
-std::string long_double_bits_key(long double value) {
-    unsigned char bytes[sizeof(long double)] = {};
-    std::memcpy(bytes, &value, sizeof(value));
-
-    std::ostringstream out;
-    out << std::hex << std::setfill('0');
-    for (unsigned char byte : bytes) {
-        out << std::setw(2) << static_cast<unsigned int>(byte);
-    }
-    return out.str();
-}
-#endif
 std::string scalar_structural_number_key(Scalar value) {
     // 对于 PreciseDecimal，直接使用字符串表示作为键
     return value.to_string();

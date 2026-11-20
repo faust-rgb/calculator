@@ -110,10 +110,10 @@ bool handle_calculus_commands(const SymbolicCommandContext& ctx,
             point.push_back(val);
         }
 
-        // 对每个变量计算偏导数
-        const Scalar h = Scalar(1e-8L);  // 差分步长
-
         for (size_t i = 0; i < vars.size(); ++i) {
+            const Scalar scale = std::max(Scalar(1.0L), mymath::abs(point[i]));
+            const Scalar h = std::max(precision::sqrt_epsilon<Scalar>(), Scalar(1e-8L)) * scale;
+
             // 中心差分：df/dx ≈ (f(x+h) - f(x-h)) / (2h)
             std::vector<std::pair<std::string, Scalar>> point_plus;
             std::vector<std::pair<std::string, Scalar>> point_minus;

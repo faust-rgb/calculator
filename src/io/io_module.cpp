@@ -11,7 +11,6 @@
 
 #include "io_module.h"
 #include "core/services/core_manager_interfaces.h"
-#include "core/services/service_locator.h"
 #include "core/common/calculator_exceptions.h"
 #include "core/services/string_utils.h"
 #include "matrix/matrix.h"
@@ -56,7 +55,7 @@ namespace {
      * @throw std::runtime_error 如果值不是标量类型
      */
     long double get_scalar(const StoredValue& val, const std::string& ctx) {
-        if (val.is_matrix || val.is_complex || val.is_string || val.is_list || val.is_dict) {
+        if (val.is_matrix() || val.is_complex() || val.is_string() || val.is_list() || val.is_dict()) {
             throw std::runtime_error(ctx + " must be a scalar");
         }
         return static_cast<long double>(val.get_decimal());
@@ -70,7 +69,7 @@ namespace {
      * @throw std::runtime_error 如果值不是字符串类型
      */
     std::string get_string(const StoredValue& val, const std::string& ctx) {
-        if (val.is_string) return val.string_value;
+        if (val.is_string()) return val.get_string_value();
         throw std::runtime_error(ctx + " must be a string");
     }
 
@@ -82,9 +81,9 @@ namespace {
      * @throw std::runtime_error 如果值不是矩阵类型
      */
     matrix::Matrix get_matrix(const StoredValue& val, const std::string& ctx) {
-        if (val.is_matrix) {
-            if (!val.matrix_ptr) throw std::runtime_error(ctx + " has invalid matrix");
-            return *val.matrix_ptr;
+        if (val.is_matrix()) {
+            if (!val.get_matrix_ptr()) throw std::runtime_error(ctx + " has invalid matrix");
+            return *val.get_matrix_ptr();
         }
         throw std::runtime_error(ctx + " must be a matrix");
     }
@@ -99,9 +98,9 @@ namespace {
      * @return 返回 JSON 格式的字符串表示
      */
     std::string value_to_json_impl(const StoredValue& val) {
-        if (val.is_string) {
+        if (val.is_string()) {
             std::string escaped;
-            for (char c : val.string_value) {
+            for (char c : val.get_string_value()) {
                 switch (c) {
                     case '"': escaped += "\\\""; break;
                     case '\\': escaped += "\\\\"; break;
@@ -113,34 +112,34 @@ namespace {
             }
             return "\"" + escaped + "\"";
         }
-        if (val.is_matrix) {
-            if (!val.matrix_ptr) return "[]";
+        if (val.is_matrix()) {
+            if (!val.get_matrix_ptr()) return "[]";
             std::string result = "[";
-            for (std::size_t r = 0; r < val.matrix_ptr->rows; ++r) {
+            for (std::size_t r = 0; r < val.get_matrix_ptr()->rows; ++r) {
                 if (r > 0) result += ", ";
-                if (val.matrix_ptr->cols > 1) result += "[";
-                for (std::size_t c = 0; c < val.matrix_ptr->cols; ++c) {
+                if (val.get_matrix_ptr()->cols > 1) result += "[";
+                for (std::size_t c = 0; c < val.get_matrix_ptr()->cols; ++c) {
                     if (c > 0) result += ", ";
-                    result += format_scalar_precise(val.matrix_ptr->at(r, c));
+                    result += format_scalar_precise(val.get_matrix_ptr()->at(r, c));
                 }
-                if (val.matrix_ptr->cols > 1) result += "]";
+                if (val.get_matrix_ptr()->cols > 1) result += "]";
             }
             result += "]";
             return result;
         }
-        if (val.is_list && val.list_value) {
+        if (val.is_list() && val.get_list_value()) {
             std::string result = "[";
-            for (std::size_t i = 0; i < val.list_value->size(); ++i) {
+            for (std::size_t i = 0; i < val.get_list_value()->size(); ++i) {
                 if (i > 0) result += ", ";
-                result += value_to_json_impl((*val.list_value)[i]);
+                result += value_to_json_impl((*val.get_list_value())[i]);
             }
             result += "]";
             return result;
         }
-        if (val.is_dict && val.dict_value) {
+        if (val.is_dict() && val.get_dict_value()) {
             std::string result = "{";
             bool first = true;
-            for (const auto& [key, value] : *val.dict_value) {
+            for (const auto& [key, value] : *val.get_dict_value()) {
                 if (!first) result += ", ";
                 first = false;
                 result += "\"" + key + "\": " + value_to_json_impl(value);
@@ -148,8 +147,8 @@ namespace {
             result += "}";
             return result;
         }
-        if (val.is_complex) {
-            return "[" + format_scalar_precise(val.complex.real()) + ", " + format_scalar_precise(val.complex.imag()) + "]";
+        if (val.is_complex()) {
+            return "[" + format_scalar_precise(val.get_complex().real()) + ", " + format_scalar_precise(val.get_complex().imag()) + "]";
         }
         // 标量数值
         return format_scalar_precise(val.get_decimal());
@@ -190,7 +189,7 @@ namespace {
                                 str += static_cast<char>(0x80 | ((codepoint >> 6) & 0x3F));
                                 str += static_cast<char>(0x80 | (codepoint & 0x3F));
                             }
-                        } catch (...) {
+                        } catch (const std::exception&) {
                             str += "\\u" + hex_str;
                         }
                         s.remove_prefix(4);
@@ -235,21 +234,21 @@ namespace {
         // 处理 null 值，转换为标量 0
         if (s.substr(0, 4) == "null") {
             s.remove_prefix(4);
-            result.decimal = 0;
+            result.set_decimal(0);
             return result;
         }
 
         // 处理 true 值，转换为标量 1
         if (s.substr(0, 4) == "true") {
             s.remove_prefix(4);
-            result.decimal = 1;
+            result.set_decimal(1);
             return result;
         }
 
         // 处理 false 值，转换为标量 0
         if (s.substr(0, 5) == "false") {
             s.remove_prefix(5);
-            result.decimal = 0;
+            result.set_decimal(0);
             return result;
         }
 
@@ -265,7 +264,7 @@ namespace {
                 ++i;
             }
             std::string num_str(s.substr(0, i));
-            result.decimal = Scalar(num_str);
+            result.set_decimal(Scalar(num_str));
             result.exact = false;
             s.remove_prefix(i);
             return result;
@@ -273,8 +272,7 @@ namespace {
 
         // 处理字符串类型
         if (s.front() == '"') {
-            result.is_string = true;
-            result.string_value = parse_json_string(s);
+            result.set_string_value(parse_json_string(s));
             return result;
         }
 
@@ -296,31 +294,30 @@ namespace {
             // 情况2：所有元素都是相同长度的数字列表 -> 2D矩阵
             bool is_numeric = true;
             for (const auto& item : items) {
-                if (item.is_string || item.is_list || item.is_dict || item.is_matrix) {
+                if (item.is_string() || item.is_list() || item.is_dict() || item.is_matrix()) {
                     is_numeric = false;
                     break;
                 }
             }
 
             if (is_numeric && !items.empty()) {
-                result.is_list = true;
-                result.list_value = std::make_shared<std::vector<StoredValue>>(std::move(items));
+                result.set_list_value(std::make_shared<std::vector<StoredValue>>(std::move(items)));
             } else if (!items.empty()) {
                 // 检查是否为2D矩阵（所有元素都是相同长度的数字列表）
                 bool is_2d_matrix = true;
                 std::size_t cols = 0;
                 for (const auto& item : items) {
-                    if (item.is_list && item.list_value) {
+                    if (item.is_list() && item.get_list_value()) {
                         // 检查列表元素是否都是数字
-                        for (const auto& sub : *item.list_value) {
-                            if (sub.is_string || sub.is_list || sub.is_dict || sub.is_matrix) {
+                        for (const auto& sub : *item.get_list_value()) {
+                            if (sub.is_string() || sub.is_list() || sub.is_dict() || sub.is_matrix()) {
                                 is_2d_matrix = false;
                                 break;
                             }
                         }
                         if (!is_2d_matrix) break;
-                        if (cols == 0) cols = item.list_value->size();
-                        else if (item.list_value->size() != cols) { is_2d_matrix = false; break; }
+                        if (cols == 0) cols = item.get_list_value()->size();
+                        else if (item.get_list_value()->size() != cols) { is_2d_matrix = false; break; }
                     } else {
                         is_2d_matrix = false;
                         break;
@@ -332,19 +329,16 @@ namespace {
                     matrix::Matrix mat(items.size(), cols, 0.0L);
                     for (std::size_t r = 0; r < items.size(); ++r) {
                         const auto& item = items[r];
-                        for (std::size_t c = 0; c < item.list_value->size(); ++c) {
-                            mat.at(r, c) = (*item.list_value)[c].decimal;
+                        for (std::size_t c = 0; c < item.get_list_value()->size(); ++c) {
+                            mat.at(r, c) = (*item.get_list_value())[c].get_decimal();
                         }
                     }
-                    result.is_matrix = true;
-                    result.matrix_ptr = std::make_shared<matrix::Matrix>(std::move(mat));
+                    result.set_matrix_ptr(std::make_shared<matrix::Matrix>(std::move(mat)));
                 } else {
-                    result.is_list = true;
-                    result.list_value = std::make_shared<std::vector<StoredValue>>(std::move(items));
+                    result.set_list_value(std::make_shared<std::vector<StoredValue>>(std::move(items)));
                 }
             } else {
-                result.is_list = true;
-                result.list_value = std::make_shared<std::vector<StoredValue>>(std::move(items));
+                result.set_list_value(std::make_shared<std::vector<StoredValue>>(std::move(items)));
             }
             return result;
         }
@@ -373,8 +367,7 @@ namespace {
                 if (!s.empty() && s.front() == ',') s.remove_prefix(1);
             }
             if (!s.empty()) s.remove_prefix(1);  // 跳过 }
-            result.is_dict = true;
-            result.dict_value = std::make_shared<std::map<std::string, StoredValue>>(std::move(obj));
+            result.set_dict_value(std::make_shared<std::map<std::string, StoredValue>>(std::move(obj)));
             return result;
         }
 
@@ -402,16 +395,16 @@ std::map<std::string, std::function<StoredValue(const std::vector<StoredValue>&)
     funcs["open"] = [this](const std::vector<StoredValue>& args) -> StoredValue {
         if (args.empty()) throw std::runtime_error("open expects at least 1 argument");
         std::string path;
-        if (args[0].is_string) {
-            path = args[0].string_value;
+        if (args[0].is_string()) {
+            path = args[0].get_string_value();
         } else {
             throw std::runtime_error("open expects a string path");
         }
         
         std::string mode = "r";
         if (args.size() > 1) {
-            if (!args[1].is_string) throw std::runtime_error("open mode must be a string");
-            mode = args[1].string_value;
+            if (!args[1].is_string()) throw std::runtime_error("open mode must be a string");
+            mode = args[1].get_string_value();
         }
         
         std::ios_base::openmode std_mode = std::ios_base::in;
@@ -438,7 +431,7 @@ std::map<std::string, std::function<StoredValue(const std::vector<StoredValue>&)
         files_[fd] = fs;
         
         StoredValue res;
-        res.decimal = fd;
+        res.set_decimal(fd);
         res.exact = false;
         return res;
     };
@@ -452,7 +445,7 @@ std::map<std::string, std::function<StoredValue(const std::vector<StoredValue>&)
         if (it != files_.end()) {
             it->second->close();
             files_.erase(it);
-            StoredValue res; res.decimal = 1; return res;
+            StoredValue res; res.set_decimal(1); return res;
         }
         throw std::runtime_error("Invalid file descriptor");
     };
@@ -466,18 +459,17 @@ std::map<std::string, std::function<StoredValue(const std::vector<StoredValue>&)
         if (it == files_.end()) throw std::runtime_error("Invalid file descriptor");
 
         StoredValue res;
-        res.is_string = true;
         if (args.size() > 1) {
             std::size_t count = static_cast<std::size_t>(get_scalar(args[1], "read count"));
             std::string buffer(count, '\0');
             it->second->read(&buffer[0], count);
             std::streamsize bytes_read = it->second->gcount();
             buffer.resize(bytes_read);
-            res.string_value = std::move(buffer);
+            res.set_string_value(std::move(buffer));
         } else {
             std::ostringstream ss;
             ss << it->second->rdbuf();
-            res.string_value = ss.str();
+            res.set_string_value(ss.str());
         }
         return res;
     };
@@ -491,16 +483,16 @@ std::map<std::string, std::function<StoredValue(const std::vector<StoredValue>&)
         if (it == files_.end()) throw std::runtime_error("Invalid file descriptor");
         
         std::string content;
-        if (args[1].is_string) {
-            content = args[1].string_value;
-        } else if (args[1].is_matrix && args[1].matrix_ptr) {
-            content = args[1].matrix_ptr->to_string();
-        } else if (args[1].is_list && args[1].list_value) {
+        if (args[1].is_string()) {
+            content = args[1].get_string_value();
+        } else if (args[1].is_matrix() && args[1].get_matrix_ptr()) {
+            content = args[1].get_matrix_ptr()->to_string();
+        } else if (args[1].is_list() && args[1].get_list_value()) {
             content = value_to_json_impl(args[1]);
-        } else if (args[1].is_dict && args[1].dict_value) {
+        } else if (args[1].is_dict() && args[1].get_dict_value()) {
             content = value_to_json_impl(args[1]);
-        } else if (args[1].is_complex) {
-            content = format_complex_precise(args[1].complex);
+        } else if (args[1].is_complex()) {
+            content = format_complex_precise(args[1].get_complex());
         } else {
             content = format_scalar_precise(args[1].get_decimal());
         }
@@ -508,7 +500,7 @@ std::map<std::string, std::function<StoredValue(const std::vector<StoredValue>&)
         *(it->second) << content;
         it->second->flush();
         
-        StoredValue res; res.decimal = 1; return res;
+        StoredValue res; res.set_decimal(1); return res;
     };
 
     // ========== read_lines 函数 ==========
@@ -523,14 +515,12 @@ std::map<std::string, std::function<StoredValue(const std::vector<StoredValue>&)
         std::string line;
         while (std::getline(*(it->second), line)) {
             StoredValue lval;
-            lval.is_string = true;
-            lval.string_value = line;
+            lval.set_string_value(line);
             lines.push_back(lval);
         }
 
         StoredValue res;
-        res.is_list = true;
-        res.list_value = std::make_shared<std::vector<StoredValue>>(std::move(lines));
+        res.set_list_value(std::make_shared<std::vector<StoredValue>>(std::move(lines)));
         return res;
     };
 
@@ -545,15 +535,13 @@ std::map<std::string, std::function<StoredValue(const std::vector<StoredValue>&)
         std::string line;
         if (std::getline(*(it->second), line)) {
             StoredValue res;
-            res.is_string = true;
-            res.string_value = line;
+            res.set_string_value(line);
             return res;
         }
 
         // 到达文件末尾（EOF），返回空字符串
         StoredValue res;
-        res.is_string = true;
-        res.string_value = "";
+        res.set_string_value("");
         return res;
     };
 
@@ -580,7 +568,7 @@ std::map<std::string, std::function<StoredValue(const std::vector<StoredValue>&)
         it->second->seekp(offset, dir);
 
         StoredValue res;
-        res.decimal = 1;
+        res.set_decimal(1);
         res.exact = false;
         return res;
     };
@@ -600,7 +588,7 @@ std::map<std::string, std::function<StoredValue(const std::vector<StoredValue>&)
         }
 
         StoredValue res;
-        res.decimal = static_cast<long double>(pos);
+        res.set_decimal(static_cast<long double>(pos));
         res.exact = false;
         return res;
     };
@@ -615,7 +603,7 @@ std::map<std::string, std::function<StoredValue(const std::vector<StoredValue>&)
         bool exists = std::filesystem::exists(path, ec);
 
         StoredValue res;
-        res.decimal = (exists && !ec) ? 1.0L : 0.0L;
+        res.set_decimal((exists && !ec) ? 1.0L : 0.0L);
         res.exact = false;
         return res;
     };
@@ -630,7 +618,7 @@ std::map<std::string, std::function<StoredValue(const std::vector<StoredValue>&)
         bool removed = std::filesystem::remove(path, ec);
 
         StoredValue res;
-        res.decimal = (removed && !ec) ? 1.0L : 0.0L;
+        res.set_decimal((removed && !ec) ? 1.0L : 0.0L);
         res.exact = false;
         return res;
     };
@@ -682,8 +670,7 @@ std::map<std::string, std::function<StoredValue(const std::vector<StoredValue>&)
 
         if (rows.empty()) {
             StoredValue res;
-            res.is_matrix = true;
-            res.matrix_ptr = std::make_shared<matrix::Matrix>(0, 0, 0.0L);
+            res.set_matrix_ptr(std::make_shared<matrix::Matrix>(0, 0, 0.0L));
             return res;
         }
 
@@ -697,8 +684,7 @@ std::map<std::string, std::function<StoredValue(const std::vector<StoredValue>&)
         }
 
         StoredValue res;
-        res.is_matrix = true;
-        res.matrix_ptr = std::make_shared<matrix::Matrix>(std::move(result));
+        res.set_matrix_ptr(std::make_shared<matrix::Matrix>(std::move(result)));
         return res;
     };
 
@@ -724,7 +710,7 @@ std::map<std::string, std::function<StoredValue(const std::vector<StoredValue>&)
         }
 
         StoredValue res;
-        res.decimal = 1;
+        res.set_decimal(1);
         res.exact = false;
         return res;
     };
@@ -763,7 +749,7 @@ std::map<std::string, std::function<StoredValue(const std::vector<StoredValue>&)
         file << value_to_json_impl(args[1]);
 
         StoredValue res;
-        res.decimal = 1;
+        res.set_decimal(1);
         res.exact = false;
         return res;
     };
@@ -795,8 +781,8 @@ std::vector<std::string> IoModule::get_function_names() const {
  */
 std::string IoModule::execute_args(const std::string& command,
                                    const std::vector<std::string>& args,
-                                   ServiceLocator& locator) {
-    auto services = locator.resolve<CoreServices>();
+                                   ModuleServices& module_services) {
+    auto* services = &module_services.core;
 
     // 命令行用法（无括号），例如: open "file.txt" w
     std::vector<StoredValue> s_args;
@@ -805,8 +791,7 @@ std::string IoModule::execute_args(const std::string& command,
         std::string parsed = trim_copy(arg);
         if (parsed.size() >= 2 && parsed.front() == '"' && parsed.back() == '"') {
             StoredValue sv;
-            sv.is_string = true;
-            sv.string_value = parsed.substr(1, parsed.size() - 2);
+            sv.set_string_value(parsed.substr(1, parsed.size() - 2));
             s_args.push_back(sv);
         } else {
             // 使用 evaluate_value 而非 parse_decimal，以支持矩阵和复数变量
@@ -819,17 +804,17 @@ std::string IoModule::execute_args(const std::string& command,
     auto it = funcs.find(command);
     if (it != funcs.end()) {
         StoredValue res = it->second(s_args);
-        if (res.is_string) return res.string_value;
-        if (res.is_matrix) return res.matrix_ptr ? res.matrix_ptr->to_string() : "[]";
-        if (res.is_dict) return value_to_json_impl(res);
-        if (res.is_list) {
-            if (!res.list_value) return "[]";
+        if (res.is_string()) return res.get_string_value();
+        if (res.is_matrix()) return res.get_matrix_ptr() ? res.get_matrix_ptr()->to_string() : "[]";
+        if (res.is_dict()) return value_to_json_impl(res);
+        if (res.is_list()) {
+            if (!res.get_list_value()) return "[]";
             std::string out = "[";
-            for (size_t i = 0; i < res.list_value->size(); ++i) {
+            for (size_t i = 0; i < res.get_list_value()->size(); ++i) {
                 if (i > 0) out += ", ";
-                const auto& item = (*res.list_value)[i];
-                if (item.is_string) {
-                    out += "\"" + item.string_value + "\"";
+                const auto& item = (*res.get_list_value())[i];
+                if (item.is_string()) {
+                    out += "\"" + item.get_string_value() + "\"";
                 } else {
                     out += value_to_json_impl(item);
                 }
@@ -837,7 +822,7 @@ std::string IoModule::execute_args(const std::string& command,
             out += "]";
             return out;
         }
-        if (res.is_complex) return format_complex_precise(res.complex);
+        if (res.is_complex()) return format_complex_precise(res.get_complex());
         return format_scalar_precise(res.get_decimal());
     }
 

@@ -13,7 +13,6 @@
 #include "analysis/modules/rootfinding_module.h"
 #include "execution/engine/script_context.h"
 #include "core/services/core_manager_interfaces.h"
-#include "core/services/service_locator.h"
 #include "analysis/rootfinding/rootfinding_engine.h"
 #include "math/numeric/precision/tolerances.h"
 #include "types/scalar_type.h"
@@ -427,7 +426,7 @@ bool handle_rootfinding_command(const RootfindingContext& ctx,
 
                     *output = "unable to solve symbolically: " + equation.simplify().to_string();
                     return true;
-                } catch (...) {
+                } catch (const std::exception&) {
                 }
             }
 
@@ -522,27 +521,27 @@ bool handle_rootfinding_command(const RootfindingContext& ctx,
 
 std::string RootfindingModule::execute_args(const std::string& command,
                                            const std::vector<std::string>& args,
-                                           ServiceLocator& locator) {
-    auto services = locator.resolve<CoreServices>();
+                                           ModuleServices& module_services) {
+    auto* services = &module_services.core;
 
     RootfindingContext ctx;
     ctx.parse_decimal = [services](const std::string& expr) { return services->evaluation.parse_decimal(expr); };
     ctx.build_scoped_evaluator = [services](const std::string& expr) {
         return services->evaluation.build_decimal_evaluator(expr);
     };
-    ctx.get_derivative_expression = [&locator](const std::string& expr_str, const std::string& var_name) {
+    ctx.get_derivative_expression = [services](const std::string& expr_str, const std::string& var_name) {
         try {
             SymbolicExpression expr;
             std::string var;
-            locator.resolve<CoreServices>()->symbolic.resolve_symbolic(expr_str, false, &var, &expr);
+            services->symbolic.resolve_symbolic(expr_str, false, &var, &expr);
             if (expr.has_node()) return expr.derivative(var_name).simplify().to_string();
-        } catch (...) {}
+        } catch (const std::exception&) {}
         return std::string();
     };
     ctx.is_matrix_argument = [services](const std::string& arg) { return services->is_matrix_argument(arg); };
     ctx.parse_matrix_argument = [services](const std::string& arg, const std::string& cmd) -> matrix::Matrix {
         auto val = services->parse_matrix_argument(arg, cmd);
-        return val.matrix_ptr ? *val.matrix_ptr : matrix::Matrix();
+        return val.get_matrix_ptr() ? *val.get_matrix_ptr() : matrix::Matrix();
     };
     ctx.normalize_result = [services](Scalar value) { return services->evaluation.normalize_result(value); };
 

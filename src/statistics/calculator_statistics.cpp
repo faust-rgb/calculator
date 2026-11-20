@@ -75,25 +75,25 @@ long long require_long_long(Scalar value, const std::string& name) {
  * - 普通数值：直接包装为单元素向量
  */
 std::vector<Scalar> extract_vector(const StoredValue& value) {
-    if (value.is_matrix && value.matrix_ptr) {
+    if (value.is_matrix() && value.get_matrix_ptr()) {
         // 矩阵类型：展开为一维向量
         std::vector<Scalar> result;
-        result.reserve(value.matrix_ptr->rows * value.matrix_ptr->cols);
-        for (std::size_t i = 0; i < value.matrix_ptr->rows; ++i) {
-            for (std::size_t j = 0; j < value.matrix_ptr->cols; ++j) {
-                result.push_back(value.matrix_ptr->at(i, j));
+        result.reserve(value.get_matrix_ptr()->rows * value.get_matrix_ptr()->cols);
+        for (std::size_t i = 0; i < value.get_matrix_ptr()->rows; ++i) {
+            for (std::size_t j = 0; j < value.get_matrix_ptr()->cols; ++j) {
+                result.push_back(value.get_matrix_ptr()->at(i, j));
             }
         }
         return result;
-    } else if (value.is_complex) {
+    } else if (value.is_complex()) {
         // 复数类型：取实部
-        return { value.complex.real() };
+        return { value.get_complex().real() };
     } else if (value.has_precise_decimal_text) {
         // 精确小数文本：转换为高精度 Scalar
         return { Scalar(value.precise_decimal_text) };
     } else {
         // 普通数值：直接返回
-        return { value.decimal };
+        return { value.get_decimal() };
     }
 }
 

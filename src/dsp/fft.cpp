@@ -415,25 +415,25 @@ std::vector<Complex> fft_bluestein(const std::vector<Complex>& input) {
     chirp_fft = chirp_fft_cache.get(n);
 
     if (chirp_fft.empty()) {
-        // 生成 chirp 信号
+        // 生成 chirp 信号: b[k] = exp(+i * pi * k^2 / n)
         std::vector<Complex> chirp(m, Complex(0.0L, 0.0L));
         for (std::size_t k = 0; k < n; ++k) {
-            const Scalar angle = -kPiScalar * Scalar((k * static_cast<long long>(k))) / Scalar(static_cast<long long>(n));
+            const Scalar angle = kPiScalar * Scalar((k * static_cast<long long>(k))) / Scalar(static_cast<long long>(n));
             chirp[k] = twiddle_factor(angle);
         }
         for (std::size_t k = m - n + 1; k < m; ++k) {
             const std::size_t kk = k - m;  // 负索引
-            const Scalar angle = -kPiScalar * Scalar(static_cast<long long>(kk) * static_cast<long long>(kk)) / Scalar(static_cast<long long>(n));
+            const Scalar angle = kPiScalar * Scalar(static_cast<long long>(kk) * static_cast<long long>(kk)) / Scalar(static_cast<long long>(n));
             chirp[k] = twiddle_factor(angle);
         }
         chirp_fft = fft_radix2(chirp);
         chirp_fft_cache.put(n, chirp_fft);
     }
 
-    // 输入信号乘以 chirp
+    // 输入信号乘以 chirp: a[k] = input[k] * exp(-i * pi * k^2 / n)
     std::vector<Complex> y(m, Complex(0.0L, 0.0L));
     for (std::size_t k = 0; k < n; ++k) {
-        const Scalar angle = kPiScalar * Scalar((k * static_cast<long long>(k))) / Scalar(static_cast<long long>(n));
+        const Scalar angle = -kPiScalar * Scalar((k * static_cast<long long>(k))) / Scalar(static_cast<long long>(n));
         y[k] = input[k] * twiddle_factor(angle);
     }
 
@@ -448,10 +448,10 @@ std::vector<Complex> fft_bluestein(const std::vector<Complex>& input) {
     // IFFT
     std::vector<Complex> result = ifft(y_fft);
 
-    // 取前 n 个点并乘以 chirp
+    // 取前 n 个点并乘以 output chirp: output[k] = result[k] * exp(-i * pi * k^2 / n)
     std::vector<Complex> output(n);
     for (std::size_t k = 0; k < n; ++k) {
-        const Scalar angle = kPiScalar * Scalar((k * static_cast<long long>(k))) / Scalar(static_cast<long long>(n));
+        const Scalar angle = -kPiScalar * Scalar((k * static_cast<long long>(k))) / Scalar(static_cast<long long>(n));
         output[k] = result[k] * twiddle_factor(angle);
     }
 

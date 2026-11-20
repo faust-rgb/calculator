@@ -414,17 +414,6 @@ RischAlgorithm::IntegrationResult RischAlgorithm::integrate_full(
         return cached_result;
     }
 
-    // 首先尝试严格 Risch 路径
-    IntegrationResult strict_result = integrate_strict(expression, variable_name, recursion_depth + 1);
-
-    // 如果严格路径成功，返回结果
-    if ((strict_result.success && strict_result.type == IntegralType::kElementary) ||
-        strict_result.type == IntegralType::kNonElementary) {
-        store_cache(expression, variable_name, strict_result);
-        return strict_result;
-    }
-
-    // 如果 strict 路径没有给出证明，继续使用非 strict 的 Risch 微分塔实现。
     SymbolicExpression simplified = expression.simplify();
 
     // 首先尝试直接三角/双曲函数积分
@@ -432,6 +421,16 @@ RischAlgorithm::IntegrationResult RischAlgorithm::integrate_full(
     if (trig_result.success && trig_result.type == IntegralType::kElementary) {
         store_cache(expression, variable_name, trig_result);
         return trig_result;
+    }
+
+    // 然后尝试严格 Risch 路径
+    IntegrationResult strict_result = integrate_strict(expression, variable_name, recursion_depth + 1);
+
+    // 如果严格路径成功，返回结果
+    if ((strict_result.success && strict_result.type == IntegralType::kElementary) ||
+        strict_result.type == IntegralType::kNonElementary) {
+        store_cache(expression, variable_name, strict_result);
+        return strict_result;
     }
 
     // Use the same canonical tower builder as strict Risch. Keeping a single

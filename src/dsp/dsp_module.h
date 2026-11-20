@@ -7,7 +7,6 @@
  * @class DspModule
  * @brief 提供数字信号处理功能（滤波器、频率响应、留数计算等）的模块
  */
-class ServiceLocator;
 
 class DspModule : public CommandFunctionModuleBase {
 public:
@@ -15,7 +14,7 @@ public:
     std::vector<std::string> get_commands() const override;
     std::string execute_args_view(std::string_view command,
                                   const std::vector<std::string_view>& args,
-                                  ServiceLocator& locator) override;
+                                  ModuleServices& module_services) override;
     std::string get_help_snippet(const std::string& topic) const override;
 
     std::map<std::string, std::function<StoredValue(const std::vector<StoredValue>&)>> get_functions_map() const override;

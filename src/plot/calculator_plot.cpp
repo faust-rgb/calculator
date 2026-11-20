@@ -24,6 +24,14 @@
 #include <iostream>
 #include <sstream>
 #include <stdexcept>
+#include <filesystem>
+#ifdef _WIN32
+#include <windows.h>
+#else
+#include <fcntl.h>
+#include <sys/wait.h>
+#include <unistd.h>
+#endif
 
 namespace plot {
 
@@ -101,12 +109,12 @@ static std::vector<DataSeries> sample_multiple_series(const PlotContext& ctx, co
 
         for (int i = 0; i < num_points; ++i) {
             Scalar x = start + (end - start) * Scalar(i) / Scalar(num_points - 1);
-            scoped_variables[var_name].decimal = x;
+            scoped_variables[var_name].set_decimal(x);
 
             try {
                 Scalar y = local_parser.evaluate(expressions[s]);
                 series.points.push_back({x, y});
-            } catch (...) {
+            } catch (const std::exception&) {
                 series.points.push_back({x, std::nan("")});
             }
         }
@@ -137,14 +145,14 @@ std::string handle_imshow_command(const PlotContext& ctx, const std::vector<std:
     if (!found) {
         throw std::runtime_error("unknown variable: " + var_name);
     }
-    if (!found->is_matrix) {
+    if (!found->is_matrix()) {
         throw std::runtime_error("imshow requires a matrix variable");
     }
 
-    if (!found->matrix_ptr) {
+    if (!found->get_matrix_ptr()) {
         throw std::runtime_error("imshow: matrix data is null");
     }
-    const matrix::Matrix& z = *found->matrix_ptr;
+    const matrix::Matrix& z = *found->get_matrix_ptr();
 
     // 解析选项
     HeatmapOptions options = parse_heatmap_options(arguments, 1);
@@ -246,13 +254,13 @@ std::string handle_bar_command(const PlotContext& ctx, const std::vector<std::st
             if (!found) {
                 throw std::runtime_error("unknown variable: " + val_arg);
             }
-            if (!found->is_matrix) {
+            if (!found->is_matrix()) {
                 throw std::runtime_error("bar requires a matrix or list for values");
             }
-            if (!found->matrix_ptr) {
+            if (!found->get_matrix_ptr()) {
                 throw std::runtime_error("bar: matrix data is null");
             }
-            const auto& mat = *found->matrix_ptr;
+            const auto& mat = *found->get_matrix_ptr();
             for (size_t i = 0; i < mat.rows; ++i) {
                 for (size_t j = 0; j < mat.cols; ++j) {
                     values.push_back(mat.at(i, j));
@@ -263,11 +271,11 @@ std::string handle_bar_command(const PlotContext& ctx, const std::vector<std::st
     } else {
         // bar(values, ...) 或 bar(values, labels, ...)
         const StoredValue* found = ctx.variables.lookup(first_arg);
-        if (found && found->is_matrix) {
-            if (!found->matrix_ptr) {
+        if (found && found->is_matrix()) {
+            if (!found->get_matrix_ptr()) {
                 throw std::runtime_error("bar: matrix data is null");
             }
-            const auto& mat = *found->matrix_ptr;
+            const auto& mat = *found->get_matrix_ptr();
             for (size_t i = 0; i < mat.rows; ++i) {
                 for (size_t j = 0; j < mat.cols; ++j) {
                     values.push_back(mat.at(i, j));
@@ -384,13 +392,13 @@ std::string handle_hist_command(const PlotContext& ctx, const std::vector<std::s
         if (!found) {
             throw std::runtime_error("unknown variable: " + first_arg);
         }
-        if (!found->is_matrix) {
-            data.push_back(found->decimal);
+        if (!found->is_matrix()) {
+            data.push_back(found->get_decimal());
         } else {
-            if (!found->matrix_ptr) {
+            if (!found->get_matrix_ptr()) {
                 throw std::runtime_error("hist: matrix data is null");
             }
-            const auto& mat = *found->matrix_ptr;
+            const auto& mat = *found->get_matrix_ptr();
             for (size_t i = 0; i < mat.rows; ++i) {
                 for (size_t j = 0; j < mat.cols; ++j) {
                     data.push_back(mat.at(i, j));
@@ -512,11 +520,11 @@ std::string handle_export_command(const PlotContext& ctx, const std::string& lin
         throw std::runtime_error("failed to open file for export: " + filename);
     }
     
-    if (found->is_matrix) {
-        if (!found->matrix_ptr) {
+    if (found->is_matrix()) {
+        if (!found->get_matrix_ptr()) {
             throw std::runtime_error("export: matrix data is null");
         }
-        const auto& mat = *found->matrix_ptr;
+        const auto& mat = *found->get_matrix_ptr();
         for (size_t r = 0; r < mat.rows; ++r) {
             for (size_t c = 0; c < mat.cols; ++c) {
                 if (c > 0) out << ",";
@@ -525,7 +533,7 @@ std::string handle_export_command(const PlotContext& ctx, const std::string& lin
             out << "\n";
         }
     } else {
-        out << found->decimal << "\n";
+        out << found->get_decimal() << "\n";
     }
     
     return "Exported " + var_name + " to " + filename;
@@ -541,48 +549,142 @@ std::string handle_export_command(const PlotContext& ctx, const std::string& lin
  * @param arguments 命令参数列表
  * @return 操作状态信息
  */
+static std::string escape_gnuplot_single_quoted(const std::string& input) {
+    std::string out;
+    out.reserve(input.size());
+    for (char ch : input) {
+        if (ch == '\'') {
+            out += "''";
+        } else if (ch == '\n' || ch == '\r' || ch == '\0') {
+            out += ' ';
+        } else {
+            out += ch;
+        }
+    }
+    return out;
+}
+
 std::string handle_gnuplot_command(const PlotContext& ctx, const std::vector<std::string>& arguments) {
     PlotOptions opts;
     std::vector<DataSeries> all_series = sample_multiple_series(ctx, arguments, opts);
 
-    // 使用更加安全的临时文件名
-    std::string temp_dir = "/tmp";
-    #ifdef _WIN32
-    char path_buf[MAX_PATH];
-    if (GetTempPathA(MAX_PATH, path_buf)) temp_dir = path_buf;
-    else temp_dir = ".";
-    #endif
-    
-    std::string data_file = temp_dir + "/calc_plot_" + std::to_string(std::time(nullptr)) + "_" + std::to_string(std::rand() % 1000) + ".dat";
-    std::ofstream out(data_file);
-    if (!out) {
-        throw std::runtime_error("failed to create temporary data file for gnuplot at " + data_file);
-    }
+    std::string data_file;
+    std::string script_file;
 
-    for (size_t s = 0; s < all_series.size(); ++s) {
-        out << "# Series: " << all_series[s].style.label << "\n";
-        for (const auto& p : all_series[s].points) {
-            if (mymath::isnan(p.y) || mymath::isinf(p.y)) {
-                out << p.x << " nan\n";
-            } else {
-                out << p.x << " " << p.y << "\n";
+#ifdef _WIN32
+    char path_buf[MAX_PATH];
+    std::string temp_dir = GetTempPathA(MAX_PATH, path_buf) ? std::string(path_buf) : ".";
+    std::string stamp = std::to_string(std::time(nullptr)) + "_" + std::to_string(GetCurrentProcessId());
+    data_file = temp_dir + "/calc_plot_" + stamp + ".dat";
+    script_file = temp_dir + "/calc_plot_" + stamp + ".gp";
+#else
+    auto create_secure_temp = [](const std::string& pattern) -> std::string {
+        std::vector<char> tmpl(pattern.begin(), pattern.end());
+        tmpl.push_back('\0');
+        int fd = mkstemp(tmpl.data());
+        if (fd < 0) {
+            throw std::runtime_error("failed to create temporary file for gnuplot");
+        }
+        close(fd);
+        return std::string(tmpl.data());
+    };
+    data_file = create_secure_temp("/tmp/calc_plot_data_XXXXXX");
+    script_file = create_secure_temp("/tmp/calc_plot_script_XXXXXX");
+#endif
+
+    auto cleanup_temp_files = [&]() {
+        std::error_code ec;
+        if (!script_file.empty()) std::filesystem::remove(script_file, ec);
+        if (!data_file.empty()) std::filesystem::remove(data_file, ec);
+    };
+
+    try {
+        {
+            std::ofstream out(data_file);
+            if (!out) {
+                throw std::runtime_error("failed to write temporary data file for gnuplot");
+            }
+            for (size_t s = 0; s < all_series.size(); ++s) {
+                out << "# Series: " << escape_gnuplot_single_quoted(all_series[s].style.label) << "\n";
+                for (const auto& p : all_series[s].points) {
+                    if (mymath::isnan(p.y) || mymath::isinf(p.y)) {
+                        out << p.x << " nan\n";
+                    } else {
+                        out << p.x << " " << p.y << "\n";
+                    }
+                }
+                out << "\n\n";
             }
         }
-        out << "\n\n"; // Gnuplot datasets separator
-    }
-    out.close();
 
-    std::ostringstream gnu_script;
-    gnu_script << "set grid; set title 'Calculator Plot'; plot ";
-    for (size_t s = 0; s < all_series.size(); ++s) {
-        if (s > 0) gnu_script << ", ";
-        gnu_script << "'" << data_file << "' index " << s << " with lines title '" << all_series[s].style.label << "'";
-    }
+        {
+            std::ofstream script_out(script_file);
+            if (!script_out) {
+                throw std::runtime_error("failed to write temporary script file for gnuplot");
+            }
+            script_out << "set grid\n";
+            script_out << "set title 'Calculator Plot'\n";
+            script_out << "plot ";
+            for (size_t s = 0; s < all_series.size(); ++s) {
+                if (s > 0) script_out << ", ";
+                script_out << "'" << escape_gnuplot_single_quoted(data_file) << "' index " << s
+                           << " with lines title '" << escape_gnuplot_single_quoted(all_series[s].style.label) << "'";
+            }
+            script_out << "\n";
+        }
 
-    std::string cmd = "gnuplot -p -e \"" + gnu_script.str() + "\" > /dev/null 2>&1";
-    int ret = std::system(cmd.c_str());
-    if (ret != 0) {
-        return "Gnuplot failed to execute. Ensure it is installed and in your PATH.";
+        int ret = -1;
+#ifdef _WIN32
+        std::string cmdline = "gnuplot -p \"" + script_file + "\"";
+        std::vector<char> cmd_buf(cmdline.begin(), cmdline.end());
+        cmd_buf.push_back('\0');
+        STARTUPINFOA si{};
+        si.cb = sizeof(si);
+        PROCESS_INFORMATION pi{};
+        if (CreateProcessA(nullptr, cmd_buf.data(), nullptr, nullptr, FALSE,
+                           CREATE_NO_WINDOW, nullptr, nullptr, &si, &pi)) {
+            WaitForSingleObject(pi.hProcess, INFINITE);
+            DWORD exit_code = 1;
+            if (GetExitCodeProcess(pi.hProcess, &exit_code)) {
+                ret = static_cast<int>(exit_code);
+            }
+            CloseHandle(pi.hProcess);
+            CloseHandle(pi.hThread);
+        }
+#else
+        pid_t pid = fork();
+        if (pid < 0) {
+            cleanup_temp_files();
+            return "Gnuplot failed to launch (fork failed).";
+        }
+        if (pid == 0) {
+            int devnull = open("/dev/null", O_WRONLY);
+            if (devnull >= 0) {
+                dup2(devnull, STDOUT_FILENO);
+                dup2(devnull, STDERR_FILENO);
+                close(devnull);
+            }
+            char* const argv[] = {
+                const_cast<char*>("gnuplot"),
+                const_cast<char*>("-p"),
+                const_cast<char*>(script_file.c_str()),
+                nullptr
+            };
+            execvp("gnuplot", argv);
+            _exit(127);
+        }
+        int status = 0;
+        if (waitpid(pid, &status, 0) > 0 && WIFEXITED(status)) {
+            ret = WEXITSTATUS(status);
+        }
+#endif
+        cleanup_temp_files();
+        if (ret != 0) {
+            return "Gnuplot failed to execute. Ensure it is installed and in your PATH.";
+        }
+    } catch (...) {
+        cleanup_temp_files();
+        throw;
     }
 
     return "Gnuplot window opened with " + std::to_string(all_series.size()) + " series.";

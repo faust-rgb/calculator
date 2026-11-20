@@ -599,7 +599,7 @@ int run_symbolic_tests(int& passed, int& failed) {
         {"ilaplace(exp(-a * s) / (s - b), s, t)", false,
          "exp(b * (-a + t)) * step(-a + t)"},
         {"ilaplace(exp(-2 * s) / (s - 1), s, t)", false,
-         "0.135335283236 * exp(t) * step(t - 2)"},
+         "exp(t - 2) * step(t - 2)"},
         {"laplace(step(t - a), t, s)", false, "exp(-(a * s)) / s"},
         {"laplace(delta(t - a), t, s)", false, "exp(-(a * s))"},
         {"fourier(exp(-2 * t) * step(t), t, w)", false, "1 / (i * w + 2)"},
@@ -2076,6 +2076,36 @@ int run_symbolic_tests(int& passed, int& failed) {
             } else {
                 ++failed;
                 std::cout << "FAIL: dsolve(\"y'' - 4*y' + 4*y\", y, x) failed, got: " << ode2_rep << "\n";
+            }
+
+            // Test non-homogeneous 2nd order ODE: y'' + y = 1 => y(x) = C1*cos(x) + C2*sin(x) + 1
+            std::string ode2_nonhom;
+            bool ode2_nonhom_res = calculator.try_process_function_command("dsolve(\"y'' + y - 1\", y, x)", &ode2_nonhom);
+            if (ode2_nonhom_res && ode2_nonhom.find("cos") != std::string::npos && ode2_nonhom.find("sin") != std::string::npos) {
+                ++passed;
+            } else {
+                ++failed;
+                std::cout << "FAIL: dsolve(\"y'' + y - 1\", y, x) failed, got: " << ode2_nonhom << "\n";
+            }
+
+            // Test separable ODE: y' = 2*x*y => y(x) = C * exp(x^2)
+            std::string ode_sep;
+            bool ode_sep_res = calculator.try_process_function_command("dsolve(\"2*x*y\", y, x)", &ode_sep);
+            if (ode_sep_res && ode_sep.find("exp") != std::string::npos) {
+                ++passed;
+            } else {
+                ++failed;
+                std::cout << "FAIL: dsolve separable 2*x*y failed, got: " << ode_sep << "\n";
+            }
+
+            // Test diff(...) notation in dsolve: diff(y, x) + 2*y - 4
+            std::string ode_diff_syntax;
+            bool ode_diff_res = calculator.try_process_function_command("dsolve(\"diff(y, x) + 2*y - 4\", y, x)", &ode_diff_syntax);
+            if (ode_diff_res && !ode_diff_syntax.empty() && ode_diff_syntax.find("exp") != std::string::npos) {
+                ++passed;
+            } else {
+                ++failed;
+                std::cout << "FAIL: dsolve diff(...) syntax failed, got: " << ode_diff_syntax << "\n";
             }
         }
 

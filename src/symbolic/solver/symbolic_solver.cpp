@@ -243,7 +243,7 @@ std::optional<Solution> SymbolicSolver::solve_from_string(
         SymbolicExpression equation = make_subtract(lhs, rhs);
         SymbolicSolver solver;
         return solver.solve(equation, variable);
-    } catch (...) {
+    } catch (const std::exception&) {
         return std::nullopt;
     }
 }
@@ -973,7 +973,7 @@ bool parse_equation(const std::string& equation_str,
         *lhs = SymbolicExpression::parse(lhs_str);
         *rhs = SymbolicExpression::parse(rhs_str);
         return true;
-    } catch (...) {
+    } catch (const std::exception&) {
         return false;
     }
 }
@@ -1013,7 +1013,7 @@ bool parse_equation_system(const std::string& system_str,
             // 如果不是等式，尝试直接作为表达式解析（假定 = 0）
             try {
                 equations->push_back(SymbolicExpression::parse(trimmed_p).simplify());
-            } catch (...) {
+            } catch (const std::exception&) {
                 return false;
             }
         }

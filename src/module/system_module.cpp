@@ -15,7 +15,8 @@
 
 #include "system_module.h"
 #include "core/services/core_manager_interfaces.h"
-#include "core/services/service_locator.h"
+#include "execution/engine/script_context.h"
+#include "execution/engine/script_context.h"
 #include "string_utils.h"
 #include "format_utils.h"
 #include "math/numeric/exact/precise_decimal.h"
@@ -82,12 +83,12 @@ std::vector<std::string> SystemModule::get_commands() const {
  */
 std::string SystemModule::execute_args_view(std::string_view command,
                                        const std::vector<std::string_view>& args,
-                                       ServiceLocator& locator) {
+                                       ModuleServices& module_services) {
     using namespace module_helpers;
-    auto services = locator.resolve<CoreServices>();
-    auto vars = locator.resolve<IVariableManager>();
-    auto funcs = locator.resolve<IFunctionManager>();
-    auto config = locator.resolve<IConfigManager>();
+    auto* services = &module_services.core;
+    auto* vars = &module_services.execution.variables();
+    auto* funcs = &module_services.execution.functions();
+    auto* config = &module_services.execution.config();
 
     if (command == ":vars") {
         auto all_vars = vars->get_all_globals();
@@ -148,7 +149,7 @@ std::string SystemModule::execute_args_view(std::string_view command,
         for (std::size_t i = 0; i < args.size(); ++i) {
             if (i != 0) out << ' ';
             const StoredValue value = services->evaluation.evaluate_value(std::string(args[i]), false);
-            out << (value.is_string ? value.string_value
+            out << (value.is_string() ? value.get_string_value()
                                     : format_stored_value(value, false));
         }
         return out.str();
@@ -158,15 +159,15 @@ std::string SystemModule::execute_args_view(std::string_view command,
     // 状态持久化命令
     if (command == ":save") {
         if (args.empty()) throw std::runtime_error(":save expects a file path");
-        return locator.resolve<IStatePersistence>()->save_state(std::string(args[0]));
+        return module_services.execution.state_persistence().save_state(std::string(args[0]));
     }
     if (command == ":load") {
         if (args.empty()) throw std::runtime_error(":load expects a file path");
-        return locator.resolve<IStatePersistence>()->load_state(std::string(args[0]));
+        return module_services.execution.state_persistence().load_state(std::string(args[0]));
     }
     if (command == ":run") {
         if (args.empty()) throw std::runtime_error(":run expects a file path");
-        return services->env.execute_script(std::string(args[0]), false); // 注意：这里简化了逻辑，实际可能需要 execute_script_file
+        return services->env.execute_script_file(std::string(args[0]), false);
     }
 
     // ==================== 模式设置命令 ====================
@@ -195,20 +196,22 @@ std::string SystemModule::execute_args_view(std::string_view command,
         try {
             config->set_display_precision(std::stoi(std::string(args[0])));
             return "Display precision set to " + std::string(args[0]);
-        } catch (...) {
+        } catch (const std::exception&) {
             return "Invalid precision value";
         }
     }
 
     // :scale - 内部计算精度设置
     if (command == ":scale") {
-        if (args.empty()) return "Internal scale: " + std::to_string(PrecisionContext::get_default_scale());
+        auto* exec = &module_services.execution;
+        if (args.empty()) return "Internal scale: " + std::to_string(exec->core_context().internal_precision_scale());
         try {
             int s = std::stoi(std::string(args[0]));
             if (s < 1 || s > 2000) return "Scale must be in range 1..2000";
             PrecisionContext::set_default_scale(s);
+            exec->core_context().set_internal_precision_scale(s);
             return "Internal calculation scale set to " + std::to_string(s);
-        } catch (...) {
+        } catch (const std::exception&) {
             return "Invalid scale value";
         }
     }

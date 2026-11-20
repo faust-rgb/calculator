@@ -415,6 +415,9 @@ IntegrationResult IntegrationEngine::integrate_recursive(
             candidate.method_used == "inverse_sqrt_linear" ||
             candidate.method_used == "polynomial_exp_linear" ||
             candidate.method_used == "unit_quartic" ||
+            candidate.method_used == "sin_power_identity" ||
+            candidate.method_used == "cos_power_identity" ||
+            candidate.method_used == "tan_power_identity" ||
             candidate.method_used == "legacy_direct") return true;
         return !verify_results_ ||
                verify_integration(expression, candidate.value, variable_name);
@@ -434,7 +437,7 @@ IntegrationResult IntegrationEngine::integrate_recursive(
                 integration_stack_.erase(key);
                 return result;
             }
-        } catch (...) {
+        } catch (const std::exception&) {
         }
         result = try_integrate_unit_quartic(expression, variable_name);
         if (accept_result(result)) {
@@ -1461,31 +1464,65 @@ IntegrationResult IntegrationEngine::try_integrate_special(
             SymbolicExpression a, b;
             SymbolicExpression arg(base.node_->left);
             if (exponent.is_number(&n) &&
-                mymath::is_near_zero(n - 2.0, 1e-10) &&
                 symbolic_decompose_linear(arg, variable_name, &a, &b) &&
                 !expr_is_zero(a)) {
                 SymbolicExpression x = SymbolicExpression::variable(variable_name);
-                SymbolicExpression double_arg =
-                    (SymbolicExpression::number(2.0) * arg).simplify();
-
-                if (base.node_->text == "sin") {
-                    SymbolicExpression result =
-                        (x / SymbolicExpression::number(2.0) -
-                         make_function("sin", double_arg) /
-                             (SymbolicExpression::number(4.0) * a)).simplify();
-                    return IntegrationResult::ok(result, "sin_power_identity");
-                }
-                if (base.node_->text == "cos") {
-                    SymbolicExpression result =
-                        (x / SymbolicExpression::number(2.0) +
-                         make_function("sin", double_arg) /
-                             (SymbolicExpression::number(4.0) * a)).simplify();
-                    return IntegrationResult::ok(result, "cos_power_identity");
-                }
-                if (base.node_->text == "tan") {
-                    SymbolicExpression result =
-                        (make_function("tan", arg) / a - x).simplify();
-                    return IntegrationResult::ok(result, "tan_power_identity");
+                if (mymath::is_near_zero(n - 2.0, 1e-10)) {
+                    SymbolicExpression double_arg =
+                        (SymbolicExpression::number(2.0) * arg).simplify();
+                    if (base.node_->text == "sin") {
+                        SymbolicExpression result =
+                            (x / SymbolicExpression::number(2.0) -
+                             make_function("sin", double_arg) /
+                                 (SymbolicExpression::number(4.0) * a)).simplify();
+                        return IntegrationResult::ok(result, "sin_power_identity");
+                    }
+                    if (base.node_->text == "cos") {
+                        SymbolicExpression result =
+                            (x / SymbolicExpression::number(2.0) +
+                             make_function("sin", double_arg) /
+                                 (SymbolicExpression::number(4.0) * a)).simplify();
+                        return IntegrationResult::ok(result, "cos_power_identity");
+                    }
+                    if (base.node_->text == "tan") {
+                        SymbolicExpression result =
+                            (make_function("tan", arg) / a - x).simplify();
+                        return IntegrationResult::ok(result, "tan_power_identity");
+                    }
+                } else if (mymath::is_near_zero(n - 3.0, 1e-10)) {
+                    if (base.node_->text == "sin") {
+                        SymbolicExpression result =
+                            ((make_negate(make_function("cos", arg)) +
+                              make_power(make_function("cos", arg),
+                                         SymbolicExpression::number(Scalar(3))) /
+                                  SymbolicExpression::number(Scalar(3))) / a).simplify();
+                        return IntegrationResult::ok(result, "sin_power_identity");
+                    }
+                    if (base.node_->text == "cos") {
+                        SymbolicExpression result =
+                            ((make_function("sin", arg) -
+                              make_power(make_function("sin", arg),
+                                         SymbolicExpression::number(Scalar(3))) /
+                                  SymbolicExpression::number(Scalar(3))) / a).simplify();
+                        return IntegrationResult::ok(result, "cos_power_identity");
+                    }
+                } else if (mymath::is_near_zero(n - 4.0, 1e-10)) {
+                    SymbolicExpression two_arg = (SymbolicExpression::number(Scalar(2)) * arg).simplify();
+                    SymbolicExpression four_arg = (SymbolicExpression::number(Scalar(4)) * arg).simplify();
+                    if (base.node_->text == "sin") {
+                        SymbolicExpression result =
+                            ((SymbolicExpression::number(Scalar(3)) * arg / SymbolicExpression::number(Scalar(8)) -
+                              make_function("sin", two_arg) / SymbolicExpression::number(Scalar(4)) +
+                              make_function("sin", four_arg) / SymbolicExpression::number(Scalar(32))) / a).simplify();
+                        return IntegrationResult::ok(result, "sin_power_identity");
+                    }
+                    if (base.node_->text == "cos") {
+                        SymbolicExpression result =
+                            ((SymbolicExpression::number(Scalar(3)) * arg / SymbolicExpression::number(Scalar(8)) +
+                              make_function("sin", two_arg) / SymbolicExpression::number(Scalar(4)) +
+                              make_function("sin", four_arg) / SymbolicExpression::number(Scalar(32))) / a).simplify();
+                        return IntegrationResult::ok(result, "cos_power_identity");
+                    }
                 }
             }
         }

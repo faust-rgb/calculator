@@ -11,33 +11,33 @@
 #define DISPLAY_PRECISION_H
 
 #include <algorithm>
+#include "math/runtime/precision/default_precision.h"
 
 namespace display_precision {
 
 /**
  * @brief 获取可变的显示精度引用
  *
- * 用于全局控制数值输出的小数位数。
- * 默认值为 12。
+ * 用于控制当前线程的数值输出小数位数。
+ * 默认值为 math::config::kDefaultDisplayPrecision。
  *
  * @return 显示精度的可变引用
  */
 inline int& mutable_value() {
-    static thread_local int precision = 12;
+    static thread_local int precision = math::config::kDefaultDisplayPrecision;
     return precision;
 }
 
 /**
  * @brief 将显示精度限制在有效范围内
  *
- * 确保精度值在 [1, 17] 范围内。
- * 17 是 double 类型的最大有效十进制位数。
+ * 与 math::config::kMinDisplayPrecision..kMaxDisplayPrecision 保持一致。
  *
  * @param precision 输入精度值
  * @return 限制后的精度值
  */
 inline int clamp(int precision) {
-    return std::clamp(precision, 1, 17);
+    return std::clamp(precision, math::config::kMinDisplayPrecision, math::config::kMaxDisplayPrecision);
 }
 
 }  // namespace display_precision

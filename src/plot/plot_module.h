@@ -43,7 +43,7 @@ public:
      */
     std::string execute_args_view(std::string_view command,
                                   const std::vector<std::string_view>& args,
-                                  ServiceLocator& locator) override;
+                                  ModuleServices& module_services) override;
 
     /**
      * @brief 获取帮助信息片段

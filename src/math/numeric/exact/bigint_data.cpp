@@ -70,9 +70,13 @@ BigIntData::~BigIntData() {
 BigIntData& BigIntData::operator=(const BigIntData& other) {
     if (this == &other) return *this;
     if (other.size_ > capacity_) {
+        uint32_t* new_ptr = new uint32_t[other.size_];
+        std::copy(other.ptr, other.ptr + other.size_, new_ptr);
         if (ptr != sso) delete[] ptr;
-        ptr = new uint32_t[other.size_];
+        ptr = new_ptr;
         capacity_ = other.size_;
+        size_ = other.size_;
+        return *this;
     }
     size_ = other.size_;
     std::copy(other.ptr, other.ptr + other.size_, ptr);

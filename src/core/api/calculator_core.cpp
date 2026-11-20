@@ -107,7 +107,7 @@ void broadcast_settings(Calculator* calculator, Calculator::Impl* impl) {
 
 Calculator::Calculator() : impl_(new Impl()) {
     impl_->parent = this;
-    // 1. 注册核心管理服务到 Locator
+    // 1. 创建核心管理服务并统一绑定到 ExecutionContext
     impl_->variables_ptr = std::make_shared<VariableManager>();
     impl_->functions_ptr = std::make_shared<FunctionManager>();
     impl_->config_ptr = std::make_shared<ConfigManager>();
@@ -120,14 +120,6 @@ Calculator::Calculator() : impl_(new Impl()) {
         execute_script(source, false);
     });
     impl_->persistence = persistence;
-
-    impl_->locator.register_service<IVariableManager>(impl_->variables_ptr);
-    impl_->locator.register_service<IFunctionManager>(impl_->functions_ptr);
-    impl_->locator.register_service<IConfigManager>(impl_->config_ptr);
-    impl_->locator.register_service<ICommandRegistry>(impl_->commands_ptr);
-    impl_->locator.register_service<IModuleManager>(impl_->modules);
-    impl_->locator.register_service<IStatePersistence>(impl_->persistence);
-    impl_->locator.register_service<IExecutionContext>(std::shared_ptr<IExecutionContext>(impl_.get(), [](IExecutionContext*){}));
 
     // 绑定管理器到 ExecutionContext，消除双重状态
     impl_->execution_ctx.bind_config_manager(impl_->config_ptr.get());
@@ -143,9 +135,8 @@ Calculator::Calculator() : impl_(new Impl()) {
 
     apply_calculator_display_precision(impl_.get());
 
-    // 2. 初始化核心逻辑服务（暂时保持旧的 CoreServices 结构用于过渡）
+    // 2. 初始化核心逻辑服务
     impl_->core_services = std::make_unique<CoreServices>(core::build_core_services(this, impl_.get()));
-    impl_->locator.register_service<CoreServices>(std::shared_ptr<CoreServices>(impl_->core_services.get(), [](CoreServices*){}));
 
     register_standard_modules(this);
 
@@ -231,9 +222,7 @@ void Calculator::register_module(std::shared_ptr<CalculatorModule> module) {
                 auto mod = weak_module.lock();
                 if (!mod) return false;
 
-                auto core = impl_->locator.resolve<CoreServices>();
-                auto execution = impl_->locator.resolve<IExecutionContext>();
-                ModuleServices module_services{impl_->locator, *core, *execution};
+                ModuleServices module_services{*impl_->core_services, *impl_};
                 *output = mod->execute_args_view(dispatch_name, args, module_services);
                 return true;
             };
@@ -279,9 +268,10 @@ void Calculator::register_module(std::shared_ptr<CalculatorModule> module) {
 
     // 6. 服务注册与初始化（先注册服务契约，再执行模块初始化）
     if (impl_->core_services) {
-        module->register_services(*impl_->core_services, impl_->locator);
+        module->register_services(*impl_->core_services, *impl_);
+        ModuleServices module_services{*impl_->core_services, *impl_};
+        module->initialize(module_services);
     }
-    module->initialize(impl_->locator);
 
     mod_mgr->register_module(module);
 }
@@ -453,7 +443,7 @@ Scalar Calculator::evaluate(const std::string& expression) {
 Scalar Calculator::evaluate_raw(const std::string& expression) {
     PrecisionContextGuard guard(impl_.get());
     const StoredValue value = evaluate_expression_value(impl_.get(), expression, false);
-    if (value.is_matrix || value.is_complex) {
+    if (value.is_matrix() || value.is_complex()) {
         throw std::runtime_error("matrix or complex expression cannot be used as a scalar");
     }
     return value.as_scalar();
@@ -500,7 +490,7 @@ std::string Calculator::to_latex(const std::string& expression) {
     try {
         SymbolicExpression expr = SymbolicExpression::parse(expression);
         return expr.to_latex();
-    } catch (...) {
+    } catch (const std::exception&) {
         try {
             StoredValue val = impl_->evaluate(expression, false);
             return val.to_latex();
@@ -661,8 +651,12 @@ std::string Calculator::list_variables() const {
 
 std::string Calculator::export_variable(const std::string& line) const {
     // 特殊处理 :export，它不是函数调用语法
+    std::string trimmed = trim_copy(line);
+    if (trimmed.compare(0, 7, ":export") == 0) {
+        trimmed = trim_copy(trimmed.substr(7));
+    }
     std::vector<std::string_view> args;
-    args.push_back(line);
+    args.push_back(trimmed);
     std::string output;
     if (!impl_->commands_ptr->try_process(":export", args, &output, false, impl_->services())) {
         throw std::runtime_error("export command failed");
@@ -692,8 +686,7 @@ const CoreServices& Calculator::Impl::services() const {
 
 StoredValue Calculator::Impl::evaluate(const std::string& expression, bool exact_mode) {
     PrecisionContextGuard guard(this);
-    auto services = locator.resolve<CoreServices>();
-    return services->evaluation.evaluate_value(expression, exact_mode);
+    return core_services->evaluation.evaluate_value(expression, exact_mode);
 }
 
 bool Calculator::Impl::try_evaluate_implicit(const std::string& expression, 

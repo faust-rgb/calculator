@@ -105,54 +105,58 @@ bool ExecutionContext::is_hex_uppercase_mode() const {
 const NativeFunction* FunctionRegistry::find_in_manager(const std::string& name) const {
     if (!function_mgr_) return nullptr;
 
-    // 检查缓存
+    // 1. 查找 IFunctionManager 原生函数表（原生函数不可变，安全永久缓存）
+    const auto* natives = function_mgr_->get_native_functions();
+    if (natives) {
+        auto it = natives->find(name);
+        if (it != natives->end()) {
+            auto cached_it = adapted_cache_.find(name);
+            if (cached_it != adapted_cache_.end()) {
+                return &cached_it->second;
+            }
+            const auto simple_func = it->second;
+            NativeFunction adapted = [simple_func](const std::vector<StoredValue>& args,
+                                                   ExecutionContext& /*ctx*/) {
+                return simple_func(args);
+            };
+            auto [cache_it, _] = adapted_cache_.emplace(name, std::move(adapted));
+            return &cache_it->second;
+        }
+    }
+
+    // 2. 自定义函数：动态解析最新定义，若函数被清除则返回 nullptr
+    if (!function_mgr_->get_custom(name)) {
+        return nullptr;
+    }
+
     auto cached_it = adapted_cache_.find(name);
     if (cached_it != adapted_cache_.end()) {
         return &cached_it->second;
     }
 
-    // 查找 IFunctionManager 原生函数表
-    const auto* natives = function_mgr_->get_native_functions();
-    NativeFunction adapted;
-    if (natives) {
-        auto it = natives->find(name);
-        if (it != natives->end()) {
-            const auto simple_func = it->second;
-            adapted = [simple_func](const std::vector<StoredValue>& args,
-                                    ExecutionContext& /*ctx*/) {
-                return simple_func(args);
-            };
+    const auto* mgr = function_mgr_;
+    NativeFunction adapted = [mgr, name](const std::vector<StoredValue>& args,
+                                         ExecutionContext& ctx) {
+        const auto* custom = mgr->get_custom(name);
+        if (!custom) throw std::runtime_error("unknown custom function: " + name);
+        if (args.size() != custom->parameter_names.size()) {
+            throw std::runtime_error("custom function argument count mismatch");
         }
-    }
-
-    // Custom functions use the same AST and scope as native functions. This
-    // avoids textual argument substitution and keeps nested calls in one
-    // evaluator.
-    if (!adapted) {
-        const auto* custom = function_mgr_->get_custom(name);
-        if (!custom) return nullptr;
-        const CustomFunction definition = *custom;
-        adapted = [definition](const std::vector<StoredValue>& args,
-                               ExecutionContext& ctx) mutable {
-            if (args.size() != definition.parameter_names.size()) {
-                throw std::runtime_error("custom function argument count mismatch");
+        const auto ast = custom->get_or_compile_ast();
+        if (!ast) throw std::runtime_error("failed to compile custom function");
+        ctx.scope().push_scope();
+        try {
+            for (std::size_t i = 0; i < args.size(); ++i) {
+                ctx.scope().set(custom->parameter_names[i], args[i]);
             }
-            const auto ast = definition.get_or_compile_ast();
-            if (!ast) throw std::runtime_error("failed to compile custom function");
-            ctx.scope().push_scope();
-            try {
-                for (std::size_t i = 0; i < args.size(); ++i) {
-                    ctx.scope().set(definition.parameter_names[i], args[i]);
-                }
-                StoredValue result = evaluate_unified_ast(ast.get(), ctx);
-                ctx.scope().pop_scope();
-                return result;
-            } catch (...) {
-                ctx.scope().pop_scope();
-                throw;
-            }
-        };
-    }
+            StoredValue result = evaluate_unified_ast(ast.get(), ctx);
+            ctx.scope().pop_scope();
+            return result;
+        } catch (...) {
+            ctx.scope().pop_scope();
+            throw;
+        }
+    };
 
     auto [cache_it, _] = adapted_cache_.emplace(name, std::move(adapted));
     return &cache_it->second;

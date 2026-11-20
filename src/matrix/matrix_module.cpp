@@ -7,7 +7,6 @@
  */
 
 #include "matrix_module.h"
-#include "core/services/service_locator.h"
 #include "core/services/core_manager_interfaces.h"
 #include "matrix.h"
 #include "matrix_internal.h"
@@ -28,14 +27,14 @@ using Scalar = mymath::Scalar;
 using ComplexNumber = mymath::complex<Scalar>;
 
 Matrix require_matrix(const StoredValue& val, const std::string& func_name) {
-    if (!val.is_matrix || !val.matrix_ptr) {
+    if (!val.is_matrix() || !val.get_matrix_ptr()) {
         throw std::runtime_error(func_name + " expects a matrix argument");
     }
-    return *val.matrix_ptr;
+    return *val.get_matrix_ptr();
 }
 
 std::size_t parse_index_argument(const StoredValue& val, const std::string& func_name) {
-    if (val.is_matrix || val.is_complex) {
+    if (val.is_matrix() || val.is_complex()) {
         throw std::runtime_error(func_name + " requires non-negative integer index");
     }
     const Scalar dec = val.get_decimal();
@@ -47,8 +46,7 @@ std::size_t parse_index_argument(const StoredValue& val, const std::string& func
 
 StoredValue make_matrix_result(Matrix m) {
     StoredValue res;
-    res.is_matrix = true;
-    res.matrix_ptr = std::make_shared<Matrix>(std::move(m));
+    res.set_matrix_ptr(std::make_shared<Matrix>(std::move(m)));
     return res;
 }
 
@@ -82,11 +80,11 @@ std::vector<std::string> MatrixModule::get_commands() const {
 
 std::string MatrixModule::execute_args_view(std::string_view command,
                                             const std::vector<std::string_view>& args,
-                                            ServiceLocator& locator) {
+                                            ModuleServices& module_services) {
     using namespace module_helpers;
     require_args_count(args, 1, 1, command);
 
-    auto& services = *locator.resolve<CoreServices>();
+    auto& services = module_services.core;
     const StoredValue val = services.evaluation.evaluate_value(std::string(args[0]), false);
     const Matrix matrix_value = require_matrix(val, std::string(command));
 
@@ -141,7 +139,7 @@ MatrixModule::get_functions_map() const {
     // does not need the legacy matrix parser for ordinary matrix expressions.
     funcs["vec"] = [](const std::vector<StoredValue>& args) -> StoredValue {
         if (args.empty()) throw std::runtime_error("vec expects at least one element");
-        if (args.size() == 1 && args[0].is_matrix) {
+        if (args.size() == 1 && args[0].is_matrix()) {
             return make_matrix_result(vectorize(require_matrix(args[0], "vec")));
         }
         std::vector<Scalar> values;
@@ -257,8 +255,8 @@ MatrixModule::get_functions_map() const {
         if (args.empty() || args.size() > 2) throw std::runtime_error("charpoly expects 1 or 2 arguments");
         Matrix m = require_matrix(args[0], "charpoly");
         Matrix poly = characteristic_polynomial<Scalar>(m);
-        if (args.size() == 2 && args[1].is_string) {
-            std::string var = args[1].string_value;
+        if (args.size() == 2 && args[1].is_string()) {
+            std::string var = args[1].get_string_value();
             std::string expr_str;
             for (std::size_t i = poly.cols; i > 0; --i) {
                 std::size_t deg = i - 1;
@@ -283,8 +281,7 @@ MatrixModule::get_functions_map() const {
                 }
             }
             StoredValue res;
-            res.is_string = true;
-            res.string_value = expr_str.empty() ? "0" : expr_str;
+            res.set_string_value(expr_str.empty() ? "0" : expr_str);
             return res;
         }
         return make_matrix_result(std::move(poly));
@@ -336,8 +333,8 @@ MatrixModule::get_functions_map() const {
     // --- reshape (1 matrix + 2 scalar args) ---
     funcs["reshape"] = [](const std::vector<StoredValue>& args) -> StoredValue {
         if (args.size() != 3) throw std::runtime_error("reshape expects 3 arguments");
-        auto rows = static_cast<std::size_t>(static_cast<long double>(args[1].decimal) + 0.5);
-        auto cols = static_cast<std::size_t>(static_cast<long double>(args[2].decimal) + 0.5);
+        auto rows = static_cast<std::size_t>(static_cast<long double>(args[1].get_decimal()) + 0.5);
+        auto cols = static_cast<std::size_t>(static_cast<long double>(args[2].get_decimal()) + 0.5);
         return make_matrix_result(reshape<Scalar>(require_matrix(args[0], "reshape"), rows, cols));
     };
 
@@ -362,12 +359,12 @@ MatrixModule::get_functions_map() const {
         if (args.size() == 3) {
             return make_matrix_result(set<Scalar>(m,
                 parse_index_argument(args[1], "set"),
-                args[2].decimal));
+                args[2].get_decimal()));
         }
         return make_matrix_result(set<Scalar>(m,
             parse_index_argument(args[1], "set"),
             parse_index_argument(args[2], "set"),
-            args[3].decimal));
+            args[3].get_decimal()));
     };
 
     return funcs;

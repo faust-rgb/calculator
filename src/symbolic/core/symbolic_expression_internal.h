@@ -552,6 +552,17 @@ bool decompose_power_factor(const SymbolicExpression& expression,
                             SymbolicExpression* base,
                             Scalar* exponent);
 
+/**
+ * @brief 分解幂因子（符号指数）
+ * @param expression 表达式
+ * @param base 输出底数
+ * @param exponent 输出符号指数
+ * @return true
+ */
+bool decompose_power_factor_expression(const SymbolicExpression& expression,
+                                       SymbolicExpression* base,
+                                       SymbolicExpression* exponent);
+
 // ============================================================================
 // 乘积项收集与重建
 // ============================================================================

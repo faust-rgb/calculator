@@ -4,7 +4,6 @@
 
 #include "symbolic/modules/transform_module.h"
 #include "execution/engine/script_context.h"
-#include "core/services/service_locator.h"
 #include "core/services/core_manager_interfaces.h"
 #include "parser/grammars/unified_expression_parser.h"
 #include "core/services/string_utils.h"
@@ -270,11 +269,11 @@ bool handle_transform_command(const TransformContext& ctx,
 
 std::string TransformModule::execute_args(const std::string& command,
                                          const std::vector<std::string>& args,
-                                         ServiceLocator& locator) {
-    auto services = locator.resolve<CoreServices>();
+                                         ModuleServices& module_services) {
+    auto* services = &module_services.core;
     TransformContext ctx;
-    ctx.resolve_symbolic = [&locator](const std::string& arg, bool req, std::string* var, SymbolicExpression* expr) {
-        locator.resolve<CoreServices>()->symbolic.resolve_symbolic(arg, req, var, expr);
+    ctx.resolve_symbolic = [services](const std::string& arg, bool req, std::string* var, SymbolicExpression* expr) {
+        services->symbolic.resolve_symbolic(arg, req, var, expr);
     };
 
     std::string output;
@@ -286,13 +285,13 @@ std::string TransformModule::execute_args(const std::string& command,
 
 std::string TransformModule::execute_args_view(std::string_view command,
                                               const std::vector<std::string_view>& args,
-                                              ServiceLocator& locator) {
+                                              ModuleServices& module_services) {
     std::vector<std::string> str_args;
     str_args.reserve(args.size());
     for (const auto& sv : args) {
         str_args.emplace_back(sv);
     }
-    return execute_args(std::string(command), str_args, locator);
+    return execute_args(std::string(command), str_args, module_services);
 }
 
 std::string TransformModule::get_help_snippet(const std::string& topic) const {
@@ -314,8 +313,8 @@ std::string TransformModule::get_help_snippet(const std::string& topic) const {
 
 std::vector<std::string> TransformModule::get_commands() const {
     return {"laplace", "laplace_info", "ilaplace", "ilaplace_info", "inverse_laplace", "fourier",
-            "fourier_info", "ifourier", "ifourier_info", "inverse_fourier", "ztrans", "iztrans",
-            "z_transform", "inverse_z"};
+            "fourier_info", "ifourier", "ifourier_info", "inverse_fourier", "ztrans", "ztrans_info",
+            "iztrans", "iztrans_info", "z_transform", "inverse_z"};
 }
 
 std::vector<CommandSpec> TransformModule::get_command_specs() const {

@@ -217,7 +217,7 @@ Scalar tanh_sinh_quadrature_callable(
     Scalar center_val = Scalar(0);
     try {
         center_val = func(center);
-    } catch (...) {
+    } catch (const std::exception&) {
         center_val = Scalar(0);
     }
     if (!mymath::isfinite(center_val)) center_val = Scalar(0);
@@ -252,10 +252,10 @@ Scalar tanh_sinh_quadrature_callable(
             Scalar f_minus = Scalar(0);
             try {
                 if (x_plus < right) f_plus = func(x_plus);
-            } catch (...) {}
+            } catch (const std::exception&) {}
             try {
                 if (x_minus > left) f_minus = func(x_minus);
-            } catch (...) {}
+            } catch (const std::exception&) {}
 
             if (mymath::isfinite(f_plus)) {
                 compensated_add(weight * f_plus, &level_sum, &compensation);

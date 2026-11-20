@@ -16,7 +16,6 @@
 #include "analysis/modules/integration_module.h"
 #include "execution/engine/script_context.h"
 #include "symbolic/core/symbolic_expression.h"
-#include "core/services/service_locator.h"
 #include "core/services/core_manager_interfaces.h"
 #include "math/numeric/precision/tolerances.h"
 #include "analysis/calculus/function_analysis.h"
@@ -132,7 +131,7 @@ bool handle_integration_command(const IntegrationContext& ctx,
             arguments.pop_back();
             has_options = true;
         } else if (last.find("tol=") == 0) {
-            try { tol = ctx.parse_decimal(last.substr(4)); } catch (...) {}
+            try { tol = ctx.parse_decimal(last.substr(4)); } catch (const std::exception&) {}
             arguments.pop_back();
             has_options = true;
         } else if (last == "adaptive" || last == "monte_carlo" || last == "sparse_grid" || last == "simpson" || last == "tensor_product") {
@@ -154,7 +153,7 @@ bool handle_integration_command(const IntegrationContext& ctx,
         if (arguments.size() >= 7) {
             try {
                 subdivides = static_cast<int>(ctx.parse_decimal(arguments[6]));
-            } catch (...) {
+            } catch (const std::exception&) {
                 z_expr = arguments[6];
                 if (arguments.size() >= 8) {
                     subdivides = static_cast<int>(ctx.parse_decimal(arguments[7]));
@@ -515,18 +514,18 @@ bool handle_integration_command(const IntegrationContext& ctx, const std::string
 
 std::string IntegrationModule::execute_args(const std::string& command,
                                             const std::vector<std::string>& args,
-                                            ServiceLocator& locator) {
-    auto services = locator.resolve<CoreServices>();
+                                            ModuleServices& module_services) {
+    auto* services = &module_services.core;
     IntegrationContext ctx;
     ctx.parse_decimal = [services](const std::string& expr) { return services->evaluation.parse_decimal(expr); };
     ctx.build_scoped_evaluator = [services](const std::string& expression) { return services->evaluation.build_decimal_evaluator(expression); };
     ctx.normalize_result = [services](Scalar value) { return services->evaluation.normalize_result(value); };
-    ctx.resolve_symbolic = [&locator](const std::string& expression, bool req, std::string* var, SymbolicExpression* expr) {
-        locator.resolve<CoreServices>()->symbolic.resolve_symbolic(expression, req, var, expr);
+    ctx.resolve_symbolic = [services](const std::string& expression, bool req, std::string* var, SymbolicExpression* expr) {
+        services->symbolic.resolve_symbolic(expression, req, var, expr);
     };
-    ctx.build_analysis = [&locator, services](const std::string& expression) {
+    ctx.build_analysis = [services](const std::string& expression) {
         SymbolicExpression expr; std::string var;
-        locator.resolve<CoreServices>()->symbolic.resolve_symbolic(expression, false, &var, &expr);
+        services->symbolic.resolve_symbolic(expression, false, &var, &expr);
         FunctionAnalysis analysis(var);
         analysis.define(expr.to_string());
         analysis.set_evaluator(services->evaluation.build_decimal_evaluator(expr.to_string()));

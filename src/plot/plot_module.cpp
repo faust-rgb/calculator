@@ -6,7 +6,6 @@
  */
 
 #include "plot_module.h"
-#include "core/services/service_locator.h"
 #include "core/services/core_manager_interfaces.h"
 #include "calculator_plot.h"
 #include "execution/engine/script_runtime.h"
@@ -37,22 +36,21 @@ std::vector<std::string> PlotModule::get_commands() const {
  */
 std::string PlotModule::execute_args_view(std::string_view command,
                                      const std::vector<std::string_view>& args,
-                                     ServiceLocator& locator) {
+                                     ModuleServices& module_services) {
     using namespace module_helpers;
-    auto services = locator.resolve<CoreServices>();
-    auto vars = locator.resolve<IVariableManager>();
-    auto funcs = locator.resolve<IFunctionManager>();
-    auto exec_ctx = locator.resolve<IExecutionContext>();
+    auto& vars = module_services.execution.variables();
+    auto& funcs = module_services.execution.functions();
+    auto* exec_ctx = &module_services.execution;
 
     plot::PlotContext pctx;
-    pctx.variables = vars->create_resolver();
-    pctx.functions = funcs->get_custom_functions_map();
-    pctx.native_functions = funcs->get_native_functions();
+    pctx.variables = vars.create_resolver();
+    pctx.functions = funcs.get_custom_functions_map();
+    pctx.native_functions = funcs.get_native_functions();
     pctx.has_script_function = [exec_ctx](const std::string& name) {
-        return has_visible_script_function(exec_ctx.get(), name);
+        return has_visible_script_function(exec_ctx, name);
     };
     pctx.invoke_script_function = [exec_ctx](const std::string& name, const std::vector<Scalar>& call_args) {
-        return invoke_script_function_decimal(exec_ctx.get(), name, call_args);
+        return invoke_script_function_decimal(exec_ctx, name, call_args);
     };
 
     // 转换参数

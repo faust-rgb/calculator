@@ -5,7 +5,6 @@
 
 #include "pde_module.h"
 #include "analysis/pde/pde_solver.h"
-#include "core/services/service_locator.h"
 #include "core/services/core_manager_interfaces.h"
 #include "core/services/string_utils.h"
 #include <iostream>
@@ -21,8 +20,8 @@ PdeModule::get_functions_map() const {
 
 std::string PdeModule::execute_args(const std::string& command,
                                     const std::vector<std::string>& args,
-                                    ServiceLocator& locator) {
-    auto services = locator.resolve<CoreServices>();
+                                    ModuleServices& module_services) {
+    auto* services = &module_services.core;
 
     if (command == "pde_heat_1d") {
         // pde_heat_1d(alpha, x_min, x_max, nx, u0, t_end, nt)

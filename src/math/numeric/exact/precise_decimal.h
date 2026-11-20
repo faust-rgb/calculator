@@ -24,6 +24,7 @@
 #include <vector>
 #include <cstdint>
 #include <iostream>
+#include <memory>
 #include "math/numeric/float128/float128.h"
 
 #include "math/runtime/precision/default_precision.h"
@@ -124,62 +125,67 @@ struct BigIntData {
 
 /**
  * @class BigIntArena
- * @brief 简单的内存池，用于 NTT 等大规模运算
+ * @brief 分块内存池，用于 NTT 等大规模运算
  *
- * 预分配一大块连续内存，通过偏移量管理内部的小型数组需求。
- * 避免频繁的 new/delete 调用。
+ * 预分配连续内存块，通过偏移量管理内部的小型数组需求。
+ * 扩容时追加新块而不释放旧块，保证已返回的指针在 reset() 前始终有效（无 UAF）。
  */
 class BigIntArena {
 public:
     static constexpr size_t DEFAULT_SIZE = 1024 * 1024;  // 4MB (1M uint32_t)
 
     explicit BigIntArena(size_t initial_size = DEFAULT_SIZE)
-        : buffer_(new uint32_t[initial_size]), capacity_(initial_size), offset_(0) {}
+        : current_chunk_(0), total_used_(0), total_capacity_(initial_size) {
+        chunks_.push_back(Chunk{std::make_unique<uint32_t[]>(initial_size), initial_size, 0});
+    }
 
-    ~BigIntArena() { delete[] buffer_; }
+    ~BigIntArena() = default;
 
     // 禁止拷贝
     BigIntArena(const BigIntArena&) = delete;
     BigIntArena& operator=(const BigIntArena&) = delete;
 
     // 允许移动
-    BigIntArena(BigIntArena&& other) noexcept
-        : buffer_(other.buffer_), capacity_(other.capacity_), offset_(other.offset_) {
-        other.buffer_ = nullptr;
-        other.capacity_ = 0;
-        other.offset_ = 0;
-    }
-
-    BigIntArena& operator=(BigIntArena&& other) noexcept {
-        if (this != &other) {
-            delete[] buffer_;
-            buffer_ = other.buffer_;
-            capacity_ = other.capacity_;
-            offset_ = other.offset_;
-            other.buffer_ = nullptr;
-            other.capacity_ = 0;
-            other.offset_ = 0;
-        }
-        return *this;
-    }
+    BigIntArena(BigIntArena&& other) noexcept = default;
+    BigIntArena& operator=(BigIntArena&& other) noexcept = default;
 
     /**
      * @brief 分配 n 个 uint32_t
-     * @return 指向分配内存的指针
+     * @return 指向分配内存的指针（在下次 reset() 之前保证有效）
      */
     uint32_t* allocate(size_t n) {
-        if (offset_ + n > capacity_) {
-            // 扩容：新大小为 max(2*capacity_, offset_ + n)
-            size_t new_capacity = std::max(capacity_ * 2, offset_ + n);
-            uint32_t* new_buffer = new uint32_t[new_capacity];
-            std::copy(buffer_, buffer_ + offset_, new_buffer);
-            delete[] buffer_;
-            buffer_ = new_buffer;
-            capacity_ = new_capacity;
+        if (chunks_.empty()) {
+            size_t cap = std::max(DEFAULT_SIZE, n);
+            chunks_.push_back(Chunk{std::make_unique<uint32_t[]>(cap), cap, 0});
+            total_capacity_ += cap;
+            current_chunk_ = 0;
         }
-        uint32_t* result = buffer_ + offset_;
-        offset_ += n;
-        return result;
+        Chunk& cur = chunks_[current_chunk_];
+        if (cur.offset + n <= cur.capacity) {
+            uint32_t* result = cur.data.get() + cur.offset;
+            cur.offset += n;
+            total_used_ += n;
+            return result;
+        }
+        // 尝试复用后续已预留的块
+        while (current_chunk_ + 1 < chunks_.size()) {
+            ++current_chunk_;
+            Chunk& next = chunks_[current_chunk_];
+            next.offset = 0;
+            if (n <= next.capacity) {
+                uint32_t* result = next.data.get();
+                next.offset = n;
+                total_used_ += n;
+                return result;
+            }
+        }
+        // 追加新块，不移动或释放旧块，避免已返回指针悬空
+        size_t new_cap = std::max(cur.capacity * 2, n);
+        chunks_.push_back(Chunk{std::make_unique<uint32_t[]>(new_cap), new_cap, n});
+        total_capacity_ += new_cap;
+        current_chunk_ = chunks_.size() - 1;
+        total_used_ += n;
+        return chunks_.back().data.get();
     }
 
     /**
@@ -192,24 +198,37 @@ public:
     }
 
     /**
-     * @brief 重置内存池（保留内存，只重置偏移量）
+     * @brief 重置内存池（保留已分配块，只重置偏移量）
      */
-    void reset() { offset_ = 0; }
+    void reset() {
+        for (auto& chunk : chunks_) {
+            chunk.offset = 0;
+        }
+        current_chunk_ = 0;
+        total_used_ = 0;
+    }
 
     /**
      * @brief 获取当前使用量
      */
-    size_t used() const { return offset_; }
+    size_t used() const { return total_used_; }
 
     /**
      * @brief 获取总容量
      */
-    size_t capacity() const { return capacity_; }
+    size_t capacity() const { return total_capacity_; }
 
 private:
-    uint32_t* buffer_;
-    size_t capacity_;
-    size_t offset_;
+    struct Chunk {
+        std::unique_ptr<uint32_t[]> data;
+        size_t capacity = 0;
+        size_t offset = 0;
+    };
+
+    std::vector<Chunk> chunks_;
+    size_t current_chunk_ = 0;
+    size_t total_used_ = 0;
+    size_t total_capacity_ = 0;
 };
 
 /**

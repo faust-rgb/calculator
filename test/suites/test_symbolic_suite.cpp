@@ -148,17 +148,138 @@ void run_risch_boundary_tests(int& passed, int& failed) {
     }
 }
 
+void run_advanced_simplification_new_tests(int& passed, int& failed) {
+    try {
+        Calculator calculator;
+        auto simplify = [&](const std::string& expression) {
+            std::string output;
+            if (!calculator.try_process_function_command("simplify(" + expression + ")", &output))
+                throw std::runtime_error("simplify command was not handled for: " + expression);
+            return output;
+        };
+
+        // 1. Euler's formula & Complex Exponentials
+        if (simplify("exp(i * pi)") != "-1")
+            throw std::runtime_error("exp(i*pi) did not simplify to -1, got: " + simplify("exp(i * pi)"));
+        if (simplify("exp(2 * i * pi)") != "1")
+            throw std::runtime_error("exp(2*i*pi) did not simplify to 1, got: " + simplify("exp(2 * i * pi)"));
+        if (simplify("exp(i * pi / 2)") != "i")
+            throw std::runtime_error("exp(i*pi/2) did not simplify to i, got: " + simplify("exp(i * pi / 2)"));
+        if (simplify("exp(-i * pi / 2)") != "-i")
+            throw std::runtime_error("exp(-i*pi/2) did not simplify to -i, got: " + simplify("exp(-i * pi / 2)"));
+
+        // 2. Inverse Trigonometric & Hyperbolic Compositions
+        if (simplify("sin(asin(x))") != "x")
+            throw std::runtime_error("sin(asin(x)) failed");
+        if (simplify("cos(acos(x))") != "x")
+            throw std::runtime_error("cos(acos(x)) failed");
+        if (simplify("tan(atan(x))") != "x")
+            throw std::runtime_error("tan(atan(x)) failed");
+        if (simplify("sinh(asinh(x))") != "x")
+            throw std::runtime_error("sinh(asinh(x)) failed");
+        if (simplify("cosh(acosh(x))") != "x")
+            throw std::runtime_error("cosh(acosh(x)) failed");
+        if (simplify("tanh(atanh(x))") != "x")
+            throw std::runtime_error("tanh(atanh(x)) failed");
+
+        // 3. Trigonometric Angle Shift / Induction Identities
+        if (simplify("sin(x + pi)") != "-sin(x)")
+            throw std::runtime_error("sin(x+pi) failed, got: " + simplify("sin(x + pi)"));
+        if (simplify("cos(x + pi)") != "-cos(x)")
+            throw std::runtime_error("cos(x+pi) failed, got: " + simplify("cos(x + pi)"));
+        if (simplify("sin(x + pi / 2)") != "cos(x)")
+            throw std::runtime_error("sin(x+pi/2) failed, got: " + simplify("sin(x + pi / 2)"));
+        if (simplify("cos(x + pi / 2)") != "-sin(x)")
+            throw std::runtime_error("cos(x+pi/2) failed, got: " + simplify("cos(x + pi / 2)"));
+        if (simplify("tan(x + pi)") != "tan(x)")
+            throw std::runtime_error("tan(x+pi) failed, got: " + simplify("tan(x + pi)"));
+
+        // 4. Exact Trigonometric Values
+        if (simplify("sin(pi / 6)") != "1/2")
+            throw std::runtime_error("sin(pi/6) failed");
+        if (simplify("cos(pi / 3)") != "1/2")
+            throw std::runtime_error("cos(pi/3) failed");
+        if (simplify("tan(pi / 4)") != "1")
+            throw std::runtime_error("tan(pi/4) failed");
+
+        // 5. Pythagorean & Hyperbolic Identities
+        if (simplify("1 - cos(x)^2") != "sin(x) ^ 2")
+            throw std::runtime_error("1 - cos(x)^2 failed, got: " + simplify("1 - cos(x)^2"));
+        if (simplify("1 - sin(x)^2") != "cos(x) ^ 2")
+            throw std::runtime_error("1 - sin(x)^2 failed, got: " + simplify("1 - sin(x)^2"));
+        if (simplify("sec(x)^2 - 1") != "tan(x) ^ 2")
+            throw std::runtime_error("sec(x)^2 - 1 failed, got: " + simplify("sec(x)^2 - 1"));
+        if (simplify("csc(x)^2 - 1") != "cot(x) ^ 2")
+            throw std::runtime_error("csc(x)^2 - 1 failed, got: " + simplify("csc(x)^2 - 1"));
+        if (simplify("cosh(x)^2 - 1") != "sinh(x) ^ 2")
+            throw std::runtime_error("cosh(x)^2 - 1 failed, got: " + simplify("cosh(x)^2 - 1"));
+        if (simplify("1 - sech(x)^2") != "tanh(x) ^ 2")
+            throw std::runtime_error("1 - sech(x)^2 failed, got: " + simplify("1 - sech(x)^2"));
+        if (simplify("1 + cot(x)^2") != "csc(x) ^ 2")
+            throw std::runtime_error("1 + cot(x)^2 failed, got: " + simplify("1 + cot(x)^2"));
+        if (simplify("1 + sinh(x)^2") != "cosh(x) ^ 2")
+            throw std::runtime_error("1 + sinh(x)^2 failed, got: " + simplify("1 + sinh(x)^2"));
+        if (simplify("tan(x) * cos(x)") != "sin(x)")
+            throw std::runtime_error("tan(x)*cos(x) failed, got: " + simplify("tan(x) * cos(x)"));
+        if (simplify("sin(x) * csc(x)") != "1")
+            throw std::runtime_error("sin(x)*csc(x) failed, got: " + simplify("sin(x) * csc(x)"));
+        if (simplify("cos(x) * sec(x)") != "1")
+            throw std::runtime_error("cos(x)*sec(x) failed, got: " + simplify("cos(x) * sec(x)"));
+
+        // 6. Complex Arithmetic & Modulus
+        if (simplify("abs(i)") != "1")
+            throw std::runtime_error("abs(i) failed, got: " + simplify("abs(i)"));
+        if (simplify("abs(4 * i)") != "4")
+            throw std::runtime_error("abs(4*i) failed, got: " + simplify("abs(4 * i)"));
+        if (simplify("abs(3 + 4 * i)") != "5")
+            throw std::runtime_error("abs(3 + 4*i) failed, got: " + simplify("abs(3 + 4 * i)"));
+        if (simplify("1 / i") != "-i")
+            throw std::runtime_error("1/i failed, got: " + simplify("1 / i"));
+
+        // 7. Radical Denesting
+        if (simplify("sqrt(3 + 2 * sqrt(2))") != "sqrt(2) + 1")
+            throw std::runtime_error("sqrt(3 + 2*sqrt(2)) failed, got: " + simplify("sqrt(3 + 2 * sqrt(2))"));
+        if (simplify("sqrt(2 * sqrt(2) + 3)") != "sqrt(2) + 1")
+            throw std::runtime_error("sqrt(2*sqrt(2) + 3) failed, got: " + simplify("sqrt(2 * sqrt(2) + 3)"));
+        if (simplify("(3 + 2 * sqrt(2)) ^ 0.5") != "sqrt(2) + 1")
+            throw std::runtime_error("(3 + 2*sqrt(2))^0.5 failed, got: " + simplify("(3 + 2 * sqrt(2)) ^ 0.5"));
+
+        // 8. Fraction Combinations
+        if (simplify("1 / x + 1 / y") != "(x + y) / (x * y)")
+            throw std::runtime_error("1/x + 1/y failed, got: " + simplify("1 / x + 1 / y"));
+        if (simplify("1 / (x + y) + 1 / (x - y)") == "1 / (x + y) + 1 / (x - y)")
+            throw std::runtime_error("1/(x+y) + 1/(x-y) fraction combination failed");
+
+        // 9. Positive Assumption Power Combining
+        calculator.process_line(":assume y positive", false);
+        if (simplify("y * y^a") != "y ^ (a + 1)")
+            throw std::runtime_error("y * y^a with y positive failed, got: " + simplify("y * y^a"));
+        if (simplify("y^a * y^b") != "y ^ (a + b)")
+            throw std::runtime_error("y^a * y^b with y positive failed, got: " + simplify("y^a * y^b"));
+        if (simplify("(y^a)^b") != "y ^ (a * b)")
+            throw std::runtime_error("(y^a)^b with y positive failed, got: " + simplify("(y^a)^b"));
+
+        ++passed;
+    } catch (const std::exception& error) {
+        ++failed;
+        std::cerr << "Advanced simplification test failed: " << error.what() << "\n";
+    }
+}
+
 int run_symbolic_tests(int& passed, int& failed);
 int test_risch(int& passed, int& failed);
 int run_risch_advanced_tests(int& passed, int& failed);
+int run_symbolic_solvers_tests(int& passed, int& failed);
 
 void run_symbolic_suite(int& passed, int& failed) {
     run_symbolic_simplification_regression_tests(passed, failed);
     run_simplification_safety_tests(passed, failed);
+    run_advanced_simplification_new_tests(passed, failed);
     run_risch_boundary_tests(passed, failed);
     run_symbolic_tests(passed, failed);
     test_risch(passed, failed);
     run_risch_advanced_tests(passed, failed);
+    run_symbolic_solvers_tests(passed, failed);
 }
 
 } // namespace test_suites

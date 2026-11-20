@@ -16,6 +16,8 @@
 #include "symbolic/base/assumptions.h"
 #include "symbolic/algebra/groebner/groebner_basis.h"
 #include "symbolic/solver/symbolic_solver.h"
+#include "symbolic/solver/symbolic_equation_solver.h"
+#include "symbolic/solver/symbolic_system_solver.h"
 #include "core/services/string_utils.h"
 #include <vector>
 #include <set>
@@ -28,6 +30,80 @@ bool handle_algebra_commands(const SymbolicCommandContext& ctx,
                             const std::string& inside,
                             const std::vector<std::string>& arguments,
                             std::string* output) {
+    if (command == "solve_symbolic" || command == "solve_eqn") {
+        if (arguments.empty() && inside.empty()) {
+            throw std::runtime_error("solve_symbolic expects an equation (and optional variable name)");
+        }
+        std::string eq_str = arguments.empty() ? inside : arguments[0];
+        std::string var_name = "x";
+        if (arguments.size() >= 2) {
+            var_name = trim_copy(arguments[1]);
+        } else {
+            // Check if inside contains comma
+            std::size_t comma = inside.rfind(',');
+            if (comma != std::string::npos) {
+                std::string possible_var = trim_copy(inside.substr(comma + 1));
+                if (!possible_var.empty() && possible_var.find_first_of(" +-*/^()=") == std::string::npos) {
+                    eq_str = trim_copy(inside.substr(0, comma));
+                    var_name = possible_var;
+                }
+            }
+        }
+        auto roots = symbolic_solvers::solve_equation_symbolic(eq_str, var_name);
+        std::ostringstream oss;
+        oss << "[";
+        for (std::size_t i = 0; i < roots.size(); ++i) {
+            if (i > 0) oss << ", ";
+            oss << var_name << " = " << roots[i].simplify().to_string();
+        }
+        oss << "]";
+        *output = oss.str();
+        return true;
+    }
+
+    if (command == "solve_system") {
+        if (arguments.size() < 2) {
+            throw std::runtime_error("solve_system expects equations and variables list: solve_system([eq1, eq2], [x, y])");
+        }
+        // Parse equations list
+        std::vector<std::string> eq_list;
+        std::string eq_arg = arguments[0];
+        if (!eq_arg.empty() && eq_arg.front() == '[' && eq_arg.back() == ']') {
+            eq_arg = eq_arg.substr(1, eq_arg.size() - 2);
+        }
+        std::stringstream ss_eq(eq_arg);
+        std::string item;
+        while (std::getline(ss_eq, item, ',')) {
+            std::string t = trim_copy(item);
+            if (!t.empty()) eq_list.push_back(t);
+        }
+
+        // Parse variables list
+        std::vector<std::string> var_list;
+        std::string var_arg = arguments[1];
+        if (!var_arg.empty() && var_arg.front() == '[' && var_arg.back() == ']') {
+            var_arg = var_arg.substr(1, var_arg.size() - 2);
+        }
+        std::stringstream ss_var(var_arg);
+        while (std::getline(ss_var, item, ',')) {
+            std::string t = trim_copy(item);
+            if (!t.empty()) var_list.push_back(t);
+        }
+
+        auto sol = symbolic_solvers::solve_linear_system_symbolic(eq_list, var_list);
+        std::ostringstream oss;
+        oss << "{";
+        bool first = true;
+        for (const auto& [var, expr] : sol) {
+            if (!first) oss << ", ";
+            first = false;
+            oss << "\"" << var << "\": " << expr.simplify().to_string();
+        }
+        oss << "}";
+        *output = oss.str();
+        return true;
+    }
+
     if (command == "groebner") {
         if (arguments.empty()) throw std::runtime_error("groebner expects polynomials and variables");
         std::vector<SymbolicExpression> polys;

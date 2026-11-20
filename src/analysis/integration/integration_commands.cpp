@@ -178,7 +178,7 @@ Scalar double_integral(
         y0_c = ctx.parse_decimal(y0_expr);
         y1_c = ctx.parse_decimal(y1_expr);
         is_constant_bounds = true;
-    } catch (...) {}
+    } catch (const std::exception&) {}
 
     if (is_constant_bounds && method != "simpson") {
         auto integrand = [evaluate_expression, x_var, y_var](const std::vector<Scalar>& pt) {
@@ -221,7 +221,7 @@ Scalar double_integral_polar(
         r0_c = ctx.parse_decimal(r0_expr);
         r1_c = ctx.parse_decimal(r1_expr);
         is_constant_bounds = true;
-    } catch (...) {}
+    } catch (const std::exception&) {}
 
     if (is_constant_bounds) {
         validate_radius_bounds(r0_c, r1_c);
@@ -289,7 +289,7 @@ Scalar triple_integral(const IntegrationContext& ctx, const std::string& expr, c
         y0_c = ctx.parse_decimal(y0_e); y1_c = ctx.parse_decimal(y1_e);
         z0_c = ctx.parse_decimal(z0_e); z1_c = ctx.parse_decimal(z1_e);
         is_constant_bounds = true;
-    } catch (...) {}
+    } catch (const std::exception&) {}
 
     if (is_constant_bounds && method != "simpson") {
         auto integrand = [evaluate_expression, x_v, y_v, z_v](const std::vector<Scalar>& pt) {
@@ -327,7 +327,7 @@ Scalar triple_integral_cyl(const IntegrationContext& ctx, const std::string& exp
         z0_c = ctx.parse_decimal(z0_e);
         z1_c = ctx.parse_decimal(z1_e);
         is_constant_bounds = true;
-    } catch (...) {}
+    } catch (const std::exception&) {}
 
     if (is_constant_bounds) {
         validate_radius_bounds(r0_c, r1_c);
@@ -392,7 +392,7 @@ Scalar triple_integral_sph(const IntegrationContext& ctx, const std::string& exp
         r0_c = ctx.parse_decimal(r0_e);
         r1_c = ctx.parse_decimal(r1_e);
         is_constant_bounds = true;
-    } catch (...) {}
+    } catch (const std::exception&) {}
 
     if (is_constant_bounds) {
         validate_radius_bounds(r0_c, r1_c);

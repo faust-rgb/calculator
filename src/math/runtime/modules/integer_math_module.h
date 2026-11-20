@@ -10,7 +10,6 @@
 
 #include "module/calculator_module.h"
 
-class ServiceLocator;
 
 /**
  * @class IntegerMathModule
@@ -44,7 +43,7 @@ public:
      */
     std::string execute_args_view(std::string_view command,
                                   const std::vector<std::string_view>& args,
-                                  ServiceLocator& locator) override;
+                                  ModuleServices& module_services) override;
 
     /** @brief 返回支持的帮助主题 */
     std::vector<std::string> get_help_topics() const override;

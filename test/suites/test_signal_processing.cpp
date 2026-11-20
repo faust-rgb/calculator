@@ -107,9 +107,9 @@ static void test_fft_non_power_of_two_bin_order(int& passed, int& failed) {
                    test_helpers::nearly_equal(spectrum[0].real(), 6.0L, kEps) &&
                    test_helpers::nearly_equal(spectrum[0].imag(), 0.0L, kEps) &&
                    test_helpers::nearly_equal(spectrum[1].real(), -1.5L, kEps) &&
-                   test_helpers::nearly_equal(spectrum[1].imag(), -root_three / 2.0L, kEps) &&
+                   test_helpers::nearly_equal(spectrum[1].imag(), root_three / 2.0L, kEps) &&
                    test_helpers::nearly_equal(spectrum[2].real(), -1.5L, kEps) &&
-                   test_helpers::nearly_equal(spectrum[2].imag(), root_three / 2.0L, kEps);
+                   test_helpers::nearly_equal(spectrum[2].imag(), -root_three / 2.0L, kEps);
     if (ok) {
         ++passed;
     } else {
@@ -210,12 +210,16 @@ static void test_circular_convolve(int& passed, int& failed) {
 }
 
 static void test_xcorr(int& passed, int& failed) {
-    std::vector<mymath::Scalar> signal1 = {1.0L, 2.0, 3.0};
-    std::vector<mymath::Scalar> signal2 = {1.0L, 2.0};
+    std::vector<mymath::Scalar> signal1 = {1.0L, 2.0L, 3.0L};
+    std::vector<mymath::Scalar> signal2 = {1.0L, 2.0L};
 
     std::vector<mymath::Scalar> result = signal::xcorr(signal1, signal2);
 
-    bool ok = (result.size() == 4u);
+    bool ok = (result.size() == 4u) &&
+              test_helpers::nearly_equal(result[0], 2.0L, 1e-6) &&
+              test_helpers::nearly_equal(result[1], 5.0L, 1e-6) &&
+              test_helpers::nearly_equal(result[2], 8.0L, 1e-6) &&
+              test_helpers::nearly_equal(result[3], 3.0L, 1e-6);
 
     if (ok) {
         ++passed;
@@ -226,23 +230,23 @@ static void test_xcorr(int& passed, int& failed) {
 }
 
 static void test_autocorr(int& passed, int& failed) {
-    std::vector<mymath::Scalar> sig = {1.0L, 2.0, 3.0};
+    std::vector<mymath::Scalar> sig = {1.0L, 2.0L, 3.0L};
 
     std::vector<mymath::Scalar> result = signal::autocorr(sig);
 
-    bool ok = (result.size() == 5u);
-    if (ok) {
-        // 自相关在零延迟处应该最大
-        // 对于信号 {1, 2, 3}，能量是 1+4+9=14
-        // xcorr 返回的结果中，零延迟在索引 0
-        ok = test_helpers::nearly_equal(result[0], 14.0, 1e-6);
-    }
+    // 对于信号 {1, 2, 3}，互相关结果为 {3, 8, 14, 8, 3}，零延迟在中心索引 2 处取最大值 14
+    bool ok = (result.size() == 5u) &&
+              test_helpers::nearly_equal(result[0], 3.0L, 1e-6) &&
+              test_helpers::nearly_equal(result[1], 8.0L, 1e-6) &&
+              test_helpers::nearly_equal(result[2], 14.0L, 1e-6) &&
+              test_helpers::nearly_equal(result[3], 8.0L, 1e-6) &&
+              test_helpers::nearly_equal(result[4], 3.0L, 1e-6);
 
     if (ok) {
         ++passed;
     } else {
         ++failed;
-        std::cout << "    FAILED: Auto-correlation test (got " << result[0] << ", expected 14)" << std::endl;
+        std::cout << "    FAILED: Auto-correlation test" << std::endl;
     }
 }
 
@@ -370,6 +374,51 @@ static void test_fir_lowpass(int& passed, int& failed) {
     } else {
         ++failed;
         std::cout << "    FAILED: FIR lowpass test" << std::endl;
+    }
+}
+
+static void test_fir_odd_order_symmetry(int& passed, int& failed) {
+    // 奇数阶 (order=15, 长度=16): 验证线性相位偶对称性
+    signal::FilterCoefficients fir = signal::design_fir(15, 0.25, signal::FilterType::LowPass);
+    bool ok = (fir.b.size() == 16u);
+    if (ok) {
+        for (std::size_t i = 0; i < fir.b.size() / 2; ++i) {
+            if (!test_helpers::nearly_equal(fir.b[i], fir.b[fir.b.size() - 1 - i], 1e-12L)) {
+                ok = false;
+                break;
+            }
+        }
+    }
+
+    if (ok) {
+        ++passed;
+    } else {
+        ++failed;
+        std::cout << "    FAILED: FIR odd order symmetry test" << std::endl;
+    }
+}
+
+static void test_iir_butterworth_nyquist_attenuation(int& passed, int& failed) {
+    // 4阶 Butterworth: 验证双线性变换映射零点后在 Nyquist 频率处的强衰减
+    signal::FilterCoefficients iir = signal::design_butterworth(4, 0.2, signal::FilterType::LowPass);
+    bool ok = (iir.b.size() == 5u && iir.a.size() == 5u);
+    if (ok) {
+        // H(e^{j*pi}) = sum((-1)^k * b[k]) / sum((-1)^k * a[k]) 应该趋近于 0
+        mymath::Scalar num_nyquist = 0.0L;
+        mymath::Scalar den_nyquist = 0.0L;
+        for (std::size_t k = 0; k < iir.b.size(); ++k) {
+            mymath::Scalar sign = (k % 2 == 0) ? 1.0L : -1.0L;
+            num_nyquist += sign * iir.b[k];
+            den_nyquist += sign * iir.a[k];
+        }
+        ok = test_helpers::nearly_equal(num_nyquist, 0.0L, 1e-10L);
+    }
+
+    if (ok) {
+        ++passed;
+    } else {
+        ++failed;
+        std::cout << "    FAILED: IIR Butterworth Nyquist attenuation test" << std::endl;
     }
 }
 
@@ -627,6 +676,8 @@ int run_signal_processing_tests(int& passed, int& failed) {
 
     // 滤波器测试
     test_fir_lowpass(passed, failed);
+    test_fir_odd_order_symmetry(passed, failed);
+    test_iir_butterworth_nyquist_attenuation(passed, failed);
     test_filter_application(passed, failed);
     test_freqz(passed, failed);
 

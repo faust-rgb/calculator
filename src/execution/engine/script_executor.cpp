@@ -119,8 +119,8 @@ ScriptSignal execute_script_statement(
             try {
                 StoredValue iterable = evaluate_command_ast_to_value(ctx, for_in.iterable_ast, exact_mode);
 
-                if (iterable.is_list && iterable.list_value) {
-                    for (const StoredValue& item : *iterable.list_value) {
+                if (iterable.is_list() && iterable.get_list_value()) {
+                    for (const StoredValue& item : *iterable.get_list_value()) {
                         ctx->variables().set_local(for_in.variable, item);
                         const ScriptSignal signal = execute_script_statement(ctx, *for_in.body, exact_mode, last_output, false);
                         if (signal.kind == ScriptSignal::Kind::kReturn) return signal;
@@ -128,14 +128,13 @@ ScriptSignal execute_script_statement(
                         if (signal.kind == ScriptSignal::Kind::kContinue) continue;
                     }
                 }
-                else if (iterable.is_matrix) {
-                    if (!iterable.matrix_ptr) throw std::runtime_error("invalid matrix value");
-                    for (std::size_t row = 0; row < iterable.matrix_ptr->rows; ++row) {
+                else if (iterable.is_matrix()) {
+                    if (!iterable.get_matrix_ptr()) throw std::runtime_error("invalid matrix value");
+                    for (std::size_t row = 0; row < iterable.get_matrix_ptr()->rows; ++row) {
                         StoredValue row_value;
-                        row_value.is_matrix = true;
-                        row_value.matrix_ptr = std::make_shared<matrix::Matrix>(1, iterable.matrix_ptr->cols);
-                        for (std::size_t col = 0; col < iterable.matrix_ptr->cols; ++col) {
-                            row_value.matrix_ptr->at(0, col) = iterable.matrix_ptr->at(row, col);
+                        row_value.set_matrix_ptr(std::make_shared<matrix::Matrix>(1, iterable.get_matrix_ptr()->cols));
+                        for (std::size_t col = 0; col < iterable.get_matrix_ptr()->cols; ++col) {
+                            row_value.get_matrix_ptr()->at(0, col) = iterable.get_matrix_ptr()->at(row, col);
                         }
                         ctx->variables().set_local(for_in.variable, row_value);
                         const ScriptSignal signal = execute_script_statement(ctx, *for_in.body, exact_mode, last_output, false);
@@ -144,11 +143,10 @@ ScriptSignal execute_script_statement(
                         if (signal.kind == ScriptSignal::Kind::kContinue) continue;
                     }
                 }
-                else if (iterable.is_string) {
+                else if (iterable.is_string()) {
                     for (char ch : iterable.get_string_value()) {
                         StoredValue char_value;
-                        char_value.is_string = true;
-                        char_value.string_value = std::string(1, ch);
+                        char_value.set_string_value(std::string(1, ch));
                         ctx->variables().set_local(for_in.variable, char_value);
                         const ScriptSignal signal = execute_script_statement(ctx, *for_in.body, exact_mode, last_output, false);
                         if (signal.kind == ScriptSignal::Kind::kReturn) return signal;
@@ -178,8 +176,8 @@ ScriptSignal execute_script_statement(
             const auto& import_stmt = static_cast<const script::ImportStatement&>(statement);
             try {
                 StoredValue path_value = evaluate_command_ast_to_value(ctx, import_stmt.path_ast, exact_mode);
-                if (!path_value.is_string) throw std::runtime_error("import path must be a string");
-                *last_output = ctx->execute_script_file(path_value.string_value, exact_mode, true);
+                if (!path_value.is_string()) throw std::runtime_error("import path must be a string");
+                *last_output = ctx->execute_script_file(path_value.get_string_value(), exact_mode, true);
                 return {};
             } catch (const std::exception& e) {
                 throw std::runtime_error(format_script_error(import_stmt.line, e));
@@ -206,27 +204,27 @@ ScriptSignal execute_script_statement(
                         matches = true;
                     } else {
                         StoredValue pattern = evaluate_command_ast_to_value(ctx, clause.pattern_ast, exact_mode);
-                        if (subject.is_matrix || pattern.is_matrix) {
-                            if (subject.is_matrix && pattern.is_matrix) {
-                                if (subject.matrix_ptr && pattern.matrix_ptr &&
-                                    subject.matrix_ptr->rows == pattern.matrix_ptr->rows && 
-                                    subject.matrix_ptr->cols == pattern.matrix_ptr->cols) {
+                        if (subject.is_matrix() || pattern.is_matrix()) {
+                            if (subject.is_matrix() && pattern.is_matrix()) {
+                                if (subject.get_matrix_ptr() && pattern.get_matrix_ptr() &&
+                                    subject.get_matrix_ptr()->rows == pattern.get_matrix_ptr()->rows && 
+                                    subject.get_matrix_ptr()->cols == pattern.get_matrix_ptr()->cols) {
                                     matches = true;
-                                    for (std::size_t i = 0; i < subject.matrix_ptr->data.size(); ++i) {
-                                        if (!mymath::is_near_zero(subject.matrix_ptr->data[i] - pattern.matrix_ptr->data[i], 1e-10)) {
+                                    for (std::size_t i = 0; i < subject.get_matrix_ptr()->data.size(); ++i) {
+                                        if (!mymath::is_near_zero(subject.get_matrix_ptr()->data[i] - pattern.get_matrix_ptr()->data[i], 1e-10)) {
                                             matches = false;
                                             break;
                                         }
                                     }
                                 } else matches = false;
                             } else matches = false;
-                        } else if (subject.is_complex || pattern.is_complex) {
-                            if (subject.is_complex && pattern.is_complex) {
-                                matches = mymath::is_near_zero(subject.complex.real() - pattern.complex.real(), 1e-10) &&
-                                          mymath::is_near_zero(subject.complex.imag() - pattern.complex.imag(), 1e-10);
+                        } else if (subject.is_complex() || pattern.is_complex()) {
+                            if (subject.is_complex() && pattern.is_complex()) {
+                                matches = mymath::is_near_zero(subject.get_complex().real() - pattern.get_complex().real(), 1e-10) &&
+                                          mymath::is_near_zero(subject.get_complex().imag() - pattern.get_complex().imag(), 1e-10);
                             } else matches = false;
-                        } else if (subject.is_string || pattern.is_string) {
-                            if (subject.is_string && pattern.is_string) matches = subject.string_value == pattern.string_value;
+                        } else if (subject.is_string() || pattern.is_string()) {
+                            if (subject.is_string() && pattern.is_string()) matches = (subject.get_string_value() == pattern.get_string_value());
                             else matches = false;
                         } else {
                             Scalar subj_val = subject.get_decimal();

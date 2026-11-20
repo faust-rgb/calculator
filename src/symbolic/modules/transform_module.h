@@ -17,7 +17,6 @@
 #include <string>
 #include <functional>
 #include "module/calculator_module.h"
-class ServiceLocator;
 
 namespace transforms {
 
@@ -39,11 +38,11 @@ public:
 
     std::string execute_args(const std::string& command,
                              const std::vector<std::string>& args,
-                             ServiceLocator& locator) override;
+                             ModuleServices& module_services) override;
 
     std::string execute_args_view(std::string_view command,
                                   const std::vector<std::string_view>& args,
-                                  ServiceLocator& locator) override;
+                                  ModuleServices& module_services) override;
 
     std::string get_help_snippet(const std::string& topic) const override;
 };

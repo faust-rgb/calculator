@@ -15,7 +15,6 @@
 
 #include "analysis/modules/analysis_module.h"
 #include "execution/engine/script_context.h"
-#include "core/services/service_locator.h"
 #include "core/services/core_manager_interfaces.h"
 #include "math/numeric/precision/tolerances.h"
 #include "analysis/calculus/analysis_command_helpers.h"
@@ -76,7 +75,7 @@ bool handle_analysis_command(const AnalysisContext& ctx,
             } else {
                 try {
                     dir = static_cast<int>(round_to_long_long(ctx.parse_decimal(dir_str)));
-                } catch (...) {
+                } catch (const std::exception&) {
                     dir = 0;
                 }
             }
@@ -128,7 +127,7 @@ bool handle_analysis_command(const AnalysisContext& ctx,
                     return true;
                 }
             }
-        } catch (...) {
+        } catch (const std::exception&) {
             // Fall through to the numerical analyzer.
         }
         if (symbolic_nonexistent) {
@@ -224,7 +223,7 @@ bool handle_analysis_command(const AnalysisContext& ctx,
                 Scalar second_val = 0.0L;
                 try {
                     second_val = analysis::evaluate_ast_node(second_deriv.node_, pt);
-                } catch (...) {}
+                } catch (const std::exception&) {}
                 const Scalar hessian_threshold = precision::positive_definite_threshold<Scalar>();
                 if (second_val > hessian_threshold) out << " (local min)";
                 else if (second_val < -hessian_threshold) out << " (local max)";
@@ -238,7 +237,7 @@ bool handle_analysis_command(const AnalysisContext& ctx,
                     for (size_t c = 0; c < hessian[r].size(); ++c) {
                         try {
                             hessian_values[r][c] = analysis::evaluate_ast_node(hessian[r][c].node_, pt);
-                        } catch (...) {
+                        } catch (const std::exception&) {
                             hessian_evaluable = false;
                             break;
                         }
@@ -343,12 +342,12 @@ bool handle_analysis_command(const AnalysisContext& ctx,
 
 std::string AnalysisModule::execute_args_view(std::string_view command,
                                              const std::vector<std::string_view>& args,
-                                             ::ServiceLocator& locator) {
+                                             ::ModuleServices& module_services) {
     using namespace module_helpers;
-    auto services = locator.resolve<CoreServices>();
+    auto* services = &module_services.core;
     AnalysisContext ctx;
-    ctx.resolve_symbolic = [&locator](const std::string& arg, bool req, std::string* var, SymbolicExpression* expr) {
-        locator.resolve<CoreServices>()->symbolic.resolve_symbolic(arg, req, var, expr);
+    ctx.resolve_symbolic = [services](const std::string& arg, bool req, std::string* var, SymbolicExpression* expr) {
+        services->symbolic.resolve_symbolic(arg, req, var, expr);
     };
     ctx.parse_symbolic_variable_arguments = [services](const std::vector<std::string>& arguments, std::size_t start_index, const std::vector<std::string>& defaults) {
         return services->parse_symbolic_vars(arguments, start_index, defaults);
@@ -359,9 +358,9 @@ std::string AnalysisModule::execute_args_view(std::string_view command,
     ctx.normalize_result = [services](Scalar value) {
         return services->evaluation.normalize_result(value);
     };
-    ctx.build_analysis = [&locator, services](const std::string& expression) {
+    ctx.build_analysis = [services](const std::string& expression) {
         SymbolicExpression expr; std::string var;
-        locator.resolve<CoreServices>()->symbolic.resolve_symbolic(expression, false, &var, &expr);
+        services->symbolic.resolve_symbolic(expression, false, &var, &expr);
         FunctionAnalysis analysis(var);
         analysis.define(expr.to_string());
         analysis.set_evaluator(services->evaluation.build_decimal_evaluator(expr.to_string()));

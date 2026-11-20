@@ -138,6 +138,26 @@ SymbolicExpression SymbolicExpression::integral(const std::string& variable_name
                 integrate_sqrt_product(right, left, &integrated)) {
                 return integrated.simplify();
             }
+            if (try_integrate_trig_product_identity(left,
+                                                    right,
+                                                    variable_name,
+                                                    &integrated) ||
+                try_integrate_trig_product_identity(right,
+                                                    left,
+                                                    variable_name,
+                                                    &integrated)) {
+                return integrated.simplify();
+            }
+            if (try_integrate_sec_csc_power_product(left,
+                                                    right,
+                                                    variable_name,
+                                                    &integrated) ||
+                try_integrate_sec_csc_power_product(right,
+                                                    left,
+                                                    variable_name,
+                                                    &integrated)) {
+                return integrated.simplify();
+            }
             if (try_integrate_substitution_product(left,
                                                   right,
                                                   variable_name,
@@ -163,18 +183,6 @@ SymbolicExpression SymbolicExpression::integral(const std::string& variable_name
                 integrate_polynomial_times_function(polynomial,
                                                     left.node_->text,
                                                     SymbolicExpression(left.node_->left),
-                                                    variable_name,
-                                                    &integrated)) {
-                return integrated.simplify();
-            }
-            if (try_integrate_trig_product_identity(left,
-                                                    right,
-                                                    variable_name,
-                                                    &integrated)) {
-                return integrated.simplify();
-            }
-            if (try_integrate_sec_csc_power_product(left,
-                                                    right,
                                                     variable_name,
                                                     &integrated)) {
                 return integrated.simplify();

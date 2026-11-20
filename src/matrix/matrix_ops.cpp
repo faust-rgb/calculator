@@ -221,30 +221,6 @@ T dot(const TMatrix<T>& lhs, const TMatrix<T>& rhs) {
     }
     return sum;
 }
-#if 0
-/**
- * @brief 向量点积 - long double 特化版本
- *
- * 使用 Kahan 补偿求和算法，减少浮点累加误差。
- * 对于大量元素的点积运算，精度损失显著降低。
- */
-// 针对 long double 的优化版 dot (Kahan 求和)
-template <>
-long double dot<long double>(const TMatrix<long double>& lhs, const TMatrix<long double>& rhs) {
-    const std::size_t n = vector_length(lhs, "dot");
-    const std::size_t m = vector_length(rhs, "dot");
-    if (n != m) throw std::runtime_error("dot size mismatch");
-    long double sum = 0.0L;
-    long double c = 0.0L;
-    for (std::size_t i = 0; i < n; ++i) {
-        long double y = static_cast<long double>(vector_entry(lhs, i)) * static_cast<long double>(vector_entry(rhs, i)) - c;
-        long double t = sum + y;
-        c = (t - sum) - y;
-        sum = t;
-    }
-    return static_cast<long double>(sum);
-}
-#endif
 /**
  * @brief 向量外积
  *

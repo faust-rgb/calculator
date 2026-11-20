@@ -168,14 +168,6 @@ private:
     core::ExecutionContext* execution_context_ = nullptr;
 
     std::unique_ptr<UnifiedParserFactory> factory_;
-
-    // 缓存的回调对象，避免重复创建
-    mutable matrix::ScalarEvaluator cached_scalar_evaluator_;
-    mutable matrix::MatrixLookup cached_matrix_lookup_;
-    mutable matrix::ComplexLookup cached_complex_lookup_;
-    mutable bool callbacks_initialized_ = false;
-
-    void ensure_callbacks_initialized() const;
 };
 
 // ============================================================================

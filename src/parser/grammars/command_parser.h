@@ -28,7 +28,7 @@
 #include "core/common/calculator_exceptions.h"
 #include "parser/lexer/lazy_token_stream.h"
 #include "parser/lexer/token_types.h"
-#include "parser/ast/expression_compiler.h"
+#include "parser/ast/expression_ast.h"
 #include "parser/ast/expression_ast.h"
 #include <memory>
 #include <string>

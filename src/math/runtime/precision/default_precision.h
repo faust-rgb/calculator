@@ -87,7 +87,7 @@ inline long double display_zero_threshold() { return std::pow(10.0L, -std::max(g
 inline long double display_integer_threshold() { return std::pow(10.0L, -std::max(get_default_scale() / 2, 5)); }
 inline long double epsilon_tolerance() { return std::pow(10.0L, -std::max(get_default_scale() - 2, 10)); }
 inline long double numeric_tolerance() { return std::pow(10.0L, -std::max(get_default_scale() - 4, 10)); }
-inline long double integer_tolerance() { return std::pow(10.0L, -std::max(get_default_scale() / 2, 8)); }
+inline long double integer_tolerance() { return std::pow(10.0L, -std::clamp(get_default_scale() / 2, 8, 15)); }
 inline long double loose_tolerance() { return std::pow(10.0L, -std::max(get_default_scale() / 3, 5)); }
 inline long double default_relative_tolerance() { return std::pow(10.0L, -std::max(get_default_scale() / 2, 8)); }
 inline long double default_absolute_tolerance() { return std::pow(10.0L, -std::max(get_default_scale() - 2, 10)); }

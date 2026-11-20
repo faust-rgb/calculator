@@ -200,152 +200,6 @@ private:
         throw SyntaxError(oss.str());
     }
 
-#if 0
-    std::unique_ptr<ExpressionAST> parse_conditional() {
-        auto expr = parse_logical();
-        if (match_kind(TokenKind::kQuestion) || match_operator("?")) {
-            auto then_branch = parse_conditional();
-            if (!match_kind(TokenKind::kColon) && !match_operator(":")) {
-                throw_syntax_error("expected ':' in conditional expression");
-            }
-            auto else_branch = parse_conditional();
-            auto node = std::make_unique<ExpressionAST>(ExprKind::kConditional);
-            node->position = expr ? expr->position : 0;
-            node->children.push_back(std::move(expr));
-            node->children.push_back(std::move(then_branch));
-            node->children.push_back(std::move(else_branch));
-            return node;
-        }
-        return expr;
-    }
-
-    std::unique_ptr<ExpressionAST> parse_logical() {
-        auto left = parse_comparison();
-
-        while (true) {
-            std::string op;
-            if (match_operator("&&")) op = "&&";
-            else if (match_operator("||")) op = "||";
-            else break;
-
-            auto right = parse_comparison();
-            auto node = std::make_unique<ExpressionAST>(ExprKind::kLogicalOp);
-            node->comparison_op = op;  // 复用 comparison_op 存储逻辑运算符
-            node->position = left ? left->position : 0;
-            node->children.push_back(std::move(left));
-            node->children.push_back(std::move(right));
-            left = std::move(node);
-        }
-        return left;
-    }
-
-    std::unique_ptr<ExpressionAST> parse_comparison() {
-        auto left = parse_expression();
-
-        while (true) {
-            std::string op;
-            if (match_operator("==")) op = "==";
-            else if (match_operator("!=")) op = "!=";
-            else if (match_operator("<=")) op = "<=";
-            else if (match_operator(">=")) op = ">=";
-            else if (match_operator("<")) op = "<";
-            else if (match_operator(">")) op = ">";
-            else break;
-
-            auto right = parse_expression();
-            auto node = std::make_unique<ExpressionAST>(ExprKind::kComparison);
-            node->comparison_op = op;
-            node->position = left ? left->position : 0;
-            node->children.push_back(std::move(left));
-            node->children.push_back(std::move(right));
-            left = std::move(node);
-        }
-        return left;
-    }
-
-    std::unique_ptr<ExpressionAST> parse_expression() {
-        auto left = parse_term();
-
-        while (true) {
-            char op = '\0';
-            if (match_operator("+")) op = '+';
-            else if (match_operator("-")) op = '-';
-            else break;
-
-            auto right = parse_term();
-            auto node = std::make_unique<ExpressionAST>(ExprKind::kBinaryOp);
-            node->op_char = op;
-            node->position = left ? left->position : 0;
-            node->children.push_back(std::move(left));
-            node->children.push_back(std::move(right));
-            left = std::move(node);
-        }
-        return left;
-    }
-
-    bool can_start_implicit_factor() {
-        if (is_at_end()) return false;
-        const auto& tok = peek_token();
-        return tok.kind == TokenKind::kIdentifier ||
-               tok.kind == TokenKind::kLParen;
-    }
-
-    std::unique_ptr<ExpressionAST> parse_term() {
-        auto left = parse_unary();
-
-        while (true) {
-            char op = '\0';
-            if (match_operator("*")) op = '*';
-            else if (match_operator("/")) op = '/';
-            else if (match_operator("%")) op = '%';
-            else if (can_start_implicit_factor()) {
-                op = '*';
-            } else break;
-
-            auto right = parse_unary();
-            auto node = std::make_unique<ExpressionAST>(ExprKind::kBinaryOp);
-            node->op_char = op;
-            node->position = left ? left->position : 0;
-            node->children.push_back(std::move(left));
-            node->children.push_back(std::move(right));
-            left = std::move(node);
-        }
-        return left;
-    }
-
-    std::unique_ptr<ExpressionAST> parse_power() {
-        auto base = parse_primary();
-
-        if (match_operator("^")) {
-            auto exponent = parse_unary();
-            auto node = std::make_unique<ExpressionAST>(ExprKind::kBinaryOp);
-            node->op_char = '^';
-            node->position = base ? base->position : 0;
-            node->children.push_back(std::move(base));
-            node->children.push_back(std::move(exponent));
-            return node;
-        }
-        return base;
-    }
-
-    std::unique_ptr<ExpressionAST> parse_unary() {
-        if (match_operator("+")) {
-            return parse_unary();
-        }
-        if (!is_at_end() && peek_token().kind == TokenKind::kOperator && peek_token().text == "-") {
-            std::size_t pos = peek_token().position;
-            advance_token();
-            auto operand = parse_unary();
-            auto node = std::make_unique<ExpressionAST>(ExprKind::kUnaryOp);
-            node->op_char = '-';
-            node->position = pos;
-            node->children.push_back(std::move(operand));
-            return node;
-        }
-        return parse_power();
-    }
-
-#endif
     std::unique_ptr<ExpressionAST> parse_primary() {
         if (is_at_end()) throw_syntax_error("expected expression");
         const auto& tok = peek_token();
@@ -601,8 +455,8 @@ Scalar evaluate_ast(const ExpressionAST* ast,
             if (ast->is_slot_bound && ast->variable_slot_index >= 0) {
                 const StoredValue* found = variables.lookup_by_slot(ast->variable_slot_index);
                 if (found) {
-                    if (found->is_matrix || found->is_complex ||
-                        found->is_string || found->has_symbolic_text) {
+                    if (found->is_matrix() || found->is_complex() ||
+                        found->is_string() || found->has_symbolic_text) {
                         throw_ast_error<MathError>("unsupported variable type: " + ast->identifier, ast->position);
                     }
                     return found->get_decimal();
@@ -616,8 +470,8 @@ Scalar evaluate_ast(const ExpressionAST* ast,
 
             const StoredValue* found = variables.lookup(ast->identifier);
             if (found) {
-                if (found->is_matrix || found->is_complex ||
-                    found->is_string || found->has_symbolic_text) {
+                if (found->is_matrix() || found->is_complex() ||
+                    found->is_string() || found->has_symbolic_text) {
                     throw_ast_error<MathError>("unsupported variable type: " + ast->identifier, ast->position);
                 }
                 return found->get_decimal();
@@ -704,8 +558,8 @@ Scalar evaluate_ast(const ExpressionAST* ast,
                     left_str = left_child->string_value;
                 } else if (left_child->kind == ExprKind::kVariable) {
                     const StoredValue* val = variables.lookup(left_child->identifier);
-                    if (val && val->is_string) {
-                        left_str = val->string_value;
+                    if (val && val->is_string()) {
+                        left_str = val->get_string_value();
                     } else {
                         throw_ast_error<MathError>("cannot compare string with non-string", ast->position);
                     }
@@ -717,8 +571,8 @@ Scalar evaluate_ast(const ExpressionAST* ast,
                     right_str = right_child->string_value;
                 } else if (right_child->kind == ExprKind::kVariable) {
                     const StoredValue* val = variables.lookup(right_child->identifier);
-                    if (val && val->is_string) {
-                        right_str = val->string_value;
+                    if (val && val->is_string()) {
+                        right_str = val->get_string_value();
                     } else {
                         throw_ast_error<MathError>("cannot compare string with non-string", ast->position);
                     }
@@ -806,7 +660,7 @@ Scalar evaluate_ast(const ExpressionAST* ast,
                     std::map<std::string, StoredValue> snapshot = variables.snapshot();
                     for (std::size_t i = 0; i < args.size(); ++i) {
                         StoredValue arg_value;
-                        arg_value.decimal = static_cast<Scalar>(args[i]);
+                        arg_value.set_decimal(static_cast<Scalar>(args[i]));
                         snapshot[it->second.parameter_names[i]] = arg_value;
                     }
                     // 使用缓存的 AST，避免每次调用重新编译
@@ -850,11 +704,11 @@ Scalar evaluate_ast(const ExpressionAST* ast,
                     sv_args.reserve(args.size());
                     for (const auto& arg : args) {
                         StoredValue sv;
-                        sv.decimal = static_cast<Scalar>(arg);
+                        sv.set_decimal(static_cast<Scalar>(arg));
                         sv_args.push_back(sv);
                     }
                     StoredValue result = it->second(sv_args);
-                    if (result.is_matrix || result.is_complex || result.is_string) {
+                    if (result.is_matrix() || result.is_complex() || result.is_string()) {
                         throw_ast_error<MathError>("native function " + ast->identifier +
                             " returned non-scalar value in scalar context", ast->position);
                     }
@@ -974,7 +828,7 @@ std::unique_ptr<ExpressionAST> compile_expression_ast(const std::string& express
     try {
         ASTCompiler compiler(expression);
         return compiler.compile();
-    } catch (...) {
+    } catch (const std::exception&) {
         return nullptr;
     }
 }
@@ -984,7 +838,7 @@ std::unique_ptr<ExpressionAST> compile_list_expression_ast(const std::string& ex
     try {
         ASTCompiler compiler(expression, true);
         return compiler.compile();
-    } catch (...) {
+    } catch (const std::exception&) {
         return nullptr;
     }
 }

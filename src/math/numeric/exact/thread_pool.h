@@ -15,6 +15,7 @@
 #define PRECISE_THREAD_POOL_H
 
 #include <atomic>
+#include <chrono>
 #include <condition_variable>
 #include <functional>
 #include <future>
@@ -86,8 +87,29 @@ public:
 
         condition_.notify_all();
 
-        // 等待所有任务完成
+        // 等待所有任务完成；等待期间协助消费队列中的任务，避免嵌套提交导致线程池死锁
         for (auto& f : futures) {
+            while (f.wait_for(std::chrono::seconds(0)) != std::future_status::ready) {
+                std::packaged_task<void()> next_task;
+                {
+                    std::lock_guard<std::mutex> lock(queue_mutex_);
+                    if (!tasks_.empty()) {
+                        next_task = std::move(tasks_.front());
+                        tasks_.pop();
+                        ++active_count_;
+                    }
+                }
+                if (next_task.valid()) {
+                    next_task();
+                    std::lock_guard<std::mutex> lock(queue_mutex_);
+                    --active_count_;
+                    if (tasks_.empty() && active_count_ == 0) {
+                        finished_condition_.notify_all();
+                    }
+                } else {
+                    f.wait();
+                }
+            }
             f.get();
         }
     }
@@ -165,7 +187,7 @@ private:
                         std::lock_guard<std::mutex> lock(queue_mutex_);
                         --active_count_;
                         if (tasks_.empty() && active_count_ == 0) {
-                            finished_condition_.notify_one();
+                            finished_condition_.notify_all();
                         }
                     }
                 }

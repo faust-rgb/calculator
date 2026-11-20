@@ -329,19 +329,33 @@ PreciseDecimal cbrt(const PreciseDecimal& val) {
 // ============================================================================
 
 PreciseDecimal pow_precise_decimal(const PreciseDecimal& base, long long exponent) {
-    if (exponent < 0) throw PreciseDecimalUnsupported("negative exponent not supported for precise decimal");
     if (exponent == 0) return PreciseDecimal::from_integer_string("1", false);
+    if (exponent < 0) {
+        if (base.is_zero()) throw std::domain_error("0 cannot be raised to a negative power");
+        if (exponent == LLONG_MIN) {
+            return one() / (pow_precise_decimal(base, -(exponent + 1)) * base);
+        }
+        return one() / pow_precise_decimal(base, -exponent);
+    }
     if (exponent == 1) return base;
 
     if (base.is_zero()) return PreciseDecimal(0LL);
     if (base == one()) return one();
     if (base == two()) {
-        BigIntData result = {1};
-        for (long long i = 0; i < exponent; ++i) {
-            result = multiply_bigint_by_uint32(result, 2);
+        BigIntData power_of_2 = {1};
+        long long exp_val = exponent;
+        BigIntData base_pow = {2};
+        while (exp_val > 0) {
+            if (exp_val & 1) {
+                power_of_2 = multiply_bigint(power_of_2, base_pow);
+            }
+            if (exp_val > 1) {
+                base_pow = multiply_bigint(base_pow, base_pow);
+            }
+            exp_val >>= 1;
         }
         PreciseDecimal res;
-        res.data = result;
+        res.data = power_of_2;
         res.scale = 0;
         res.negative = false;
         return res;
@@ -355,7 +369,9 @@ PreciseDecimal pow_precise_decimal(const PreciseDecimal& base, long long exponen
         if (exp & 1) {
             res = multiply_precise_decimal(res, b);
         }
-        b = multiply_precise_decimal(b, b);
+        if (exp > 1) {
+            b = multiply_precise_decimal(b, b);
+        }
         exp >>= 1;
     }
     return res;
@@ -594,9 +610,9 @@ PreciseDecimal log10(const PreciseDecimal& x) {
 PreciseDecimal exp(const PreciseDecimal& x) {
     if (x.is_zero()) return one();
 
+    constexpr long double kMaxPreciseExpInput = 100000.0L;
     const long double x_ld = static_cast<long double>(x);
-    if (x_ld >= mymath::kLnDoubleMax) return PreciseDecimal::infinity();
-    if (x_ld <= mymath::kLnDoubleDenormMin) return PreciseDecimal(0LL);
+    if (x_ld >= kMaxPreciseExpInput) return PreciseDecimal::infinity();
 
     const long double x_magnitude = mymath::abs(x_ld);
     const int extra_scale = std::max(8, static_cast<int>(x_magnitude / std::log(10.0L)) + 8);
@@ -605,6 +621,7 @@ PreciseDecimal exp(const PreciseDecimal& x) {
 
     if (x.negative) {
         PreciseDecimal abs_x = precise::abs(x);
+        if (static_cast<long double>(abs_x) >= kMaxPreciseExpInput) return PreciseDecimal(0LL);
         return one() / exp(abs_x);
     }
 
@@ -911,7 +928,7 @@ PreciseDecimal asin(const PreciseDecimal& x) {
     if (precise::abs(x) > one()) throw std::domain_error("asin out of range");
     if (x == one()) return pi() / two();
     if (x == -one()) return -pi() / two();
-    return atan(x / precise::sqrt(one() - x * x));
+    return atan(x / precise::sqrt((one() - x) * (one() + x)));
 }
 
 PreciseDecimal acos(const PreciseDecimal& x) {
@@ -920,14 +937,21 @@ PreciseDecimal acos(const PreciseDecimal& x) {
 
 PreciseDecimal atan(const PreciseDecimal& x) {
     if (x.is_zero()) return PreciseDecimal(0LL);
+    if (x.negative) return -atan(-x);
 
     ScopedPrecision guard(8);
 
     if (x == one()) return pi() / PreciseDecimal(4LL);
-    if (x == -one()) return -pi() / PreciseDecimal(4LL);
-    if (precise::abs(x) > one()) {
-        if (x.negative) return -pi() / two() - atan(one() / x);
+    if (x > one()) {
         return pi() / two() - atan(one() / x);
+    }
+
+    // Argument reduction for x in (0.41421356, 1.0]:
+    // atan(x) = 2 * atan(x / (1 + sqrt(1 + x^2)))
+    const PreciseDecimal reduction_threshold("0.4142135623730950488");
+    if (x > reduction_threshold) {
+        PreciseDecimal next_x = x / (one() + precise::sqrt(one() + x * x));
+        return two() * atan(next_x);
     }
 
     NormalizationSuppressor suppressor;
@@ -1181,7 +1205,7 @@ std::string rational_to_precise_decimal_text(const Rational& value) {
 std::string stored_value_precise_decimal_text(const StoredValue& value) {
     if (value.exact) return rational_to_precise_decimal_text(value.rational);
     if (value.has_precise_decimal_text) return value.precise_decimal_text;
-    return format_decimal(normalize_display_decimal(value.decimal.to_long_double()), 15);
+    return format_decimal(normalize_display_decimal(value.get_decimal().to_long_double()), 15);
 }
 
 } // namespace precise

@@ -17,61 +17,22 @@
 
 #include "parser/lexer/token_types.h"
 #include "parser/ast/expression_ast.h"
+#include <memory>
 #include <string>
 #include <string_view>
 #include <vector>
-#include <set>
-
-/**
- * @enum ParserKind
- * @brief 解析器类型枚举
- */
-enum class ParserKind {
-    kStringLiteral,   ///< 字符串字面量
-    kIdentifier,      ///< 单个标识符
-    kExact,           ///< 精确模式（有理数）
-    kMatrix,          ///< 矩阵表达式
-    kComplex,         ///< 复数表达式
-    kScalar,          ///< 标量表达式
-    kSymbolic,        ///< 符号表达式
-    kRatCall,         ///< rat() 函数调用
-    kUnifiedExpression, ///< 统一 ExpressionAST（标量/复数/矩阵/下标混合）
-    kUnknown,         ///< 需要动态判断
-};
-
-/**
- * @struct ParseContext
- * @brief 解析上下文，影响解析器选择
- */
-struct ParseContext {
-    bool exact_mode = false;           ///< 是否精确模式
-    bool allow_matrix = true;          ///< 是否允许矩阵
-    bool allow_complex = true;         ///< 是否允许复数
-    bool need_symbolic = false;        ///< 是否需要符号结果
-    const std::set<std::string>* known_functions = nullptr;  ///< 已知函数集合
-
-    ParseContext() = default;
-};
 
 /**
  * @class UnifiedParserFactory
- * @brief 统一解析器工厂，单次分析确定解析路径
+ * @brief 统一表达式分析与单次 AST 编译工厂
  *
- * 通过单次 Token 扫描分析表达式特征，一次性决定使用哪个解析器，
- * 避免传统方法中依次尝试多个解析器的开销。
+ * 通过单次 Token 扫描分析表达式特征，并一次性编译为 ExpressionAST，
+ * 避免重复解析和传统的多解析器试错开销。
  */
 class VariableResolver;
 
 class UnifiedParserFactory {
 public:
-    /**
-     * @brief 分析表达式并选择解析器
-     * @param expression 表达式字符串
-     * @param ctx 解析上下文
-     * @return 选择的解析器类型
-     */
-    ParserKind select_parser(const std::string& expression, const ParseContext& ctx);
-
     /**
      * @brief 分析表达式特征
      * @param expression 表达式字符串
@@ -88,41 +49,32 @@ public:
 
     /**
      * @struct AnalysisResult
-     * @brief 分析结果
+     * @brief 分析结果（包含单次编译得到的 ExpressionAST）
      */
     struct AnalysisResult {
-        ParserKind parser;              ///< 选择的解析器
-        ExpressionHint hint;            ///< 类型提示
-        ExpressionFeature features;     ///< 特征
-        bool has_standalone_i;          ///< 是否包含独立的 i
-        bool has_bracket;               ///< 是否包含方括号
-        bool has_matrix_func;           ///< 是否包含矩阵函数
-        bool has_rat_call;              ///< 是否包含 rat 调用
-        bool has_string;                ///< 是否包含字符串
-        bool has_assignment;            ///< 是否包含赋值
-        bool has_matrix_or_complex_var; ///< 是否引用了矩阵/复数变量
-        bool ast_valid = false;          ///< 是否已通过统一表达式 AST 编译
-        int paren_depth;                ///< 括号深度
-        int bracket_depth;              ///< 方括号深度
+        ExpressionHint hint = ExpressionHint::kUnknown;
+        ExpressionFeature features = ExpressionFeature::kNone;
+        bool has_standalone_i = false;
+        bool has_bracket = false;
+        bool has_matrix_func = false;
+        bool has_rat_call = false;
+        bool has_string = false;
+        bool has_assignment = false;
+        bool has_matrix_or_complex_var = false;
+        bool ast_valid = false;
+        int paren_depth = 0;
+        int bracket_depth = 0;
+        std::unique_ptr<ExpressionAST> compiled_ast;
     };
 
     /**
-     * @brief 完整分析表达式
+     * @brief 完整分析表达式并单次编译 ExpressionAST
      * @param expression 表达式字符串
      * @param variables 变量解析器（用于检测矩阵/复数变量引用）
      * @return 分析结果
      */
     AnalysisResult analyze(const std::string& expression,
                            const VariableResolver* variables = nullptr);
-
-private:
-    /**
-     * @brief 基于 Token 序列分析
-     * @param tokens Token 序列
-     * @param ctx 解析上下文
-     * @return 分析结果
-     */
-    AnalysisResult analyze_tokens(const std::vector<Token>& tokens, const ParseContext& ctx);
 };
 
 #endif // CORE_UNIFIED_PARSER_FACTORY_H

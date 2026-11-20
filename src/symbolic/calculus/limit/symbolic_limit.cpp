@@ -70,7 +70,7 @@ std::optional<Scalar> evaluate_at_point(const SymbolicExpression& expr,
         if (sv.is_scalar() && mymath::isfinite(sv.get_decimal())) {
             return sv.get_decimal();
         }
-    } catch (...) {
+    } catch (const std::exception&) {
     }
     return std::nullopt;
 }
@@ -990,7 +990,7 @@ bool SymbolicLimitEngine::apply_series_expansion(
     const SymbolicExpression& expr,
     const std::string& var,
     const BoundArgument& point,
-    int direction,
+    [[maybe_unused]] int direction,
     LimitResult* result) {
 
     series_ops::SeriesContext ctx;
@@ -1011,7 +1011,7 @@ bool SymbolicLimitEngine::apply_series_expansion(
                     return true;
                 }
             }
-        } catch (...) {
+        } catch (const std::exception&) {
             return false;
         }
     } else {
@@ -1029,7 +1029,7 @@ bool SymbolicLimitEngine::apply_series_expansion(
                     return true;
                 }
             }
-        } catch (...) {
+        } catch (const std::exception&) {
             return false;
         }
     }
@@ -1332,7 +1332,7 @@ std::optional<SymbolicExpression> SymbolicLimitEngine::limit(
             return result.value;
         }
         return std::nullopt;
-    } catch (...) {
+    } catch (const std::exception&) {
         return std::nullopt;
     }
 }
@@ -1427,7 +1427,7 @@ bool parse_limit_arguments(
         }
 
         return true;
-    } catch (...) {
+    } catch (const std::exception&) {
         return false;
     }
 }

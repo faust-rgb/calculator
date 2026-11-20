@@ -40,7 +40,7 @@ SymbolicExpression fourier_transform_impl_uncached(const SymbolicExpression& exp
         if (rule.matcher && rule.transformer && rule.matcher(simplified, time_variable)) {
             try {
                 return rule.transformer(simplified, time_variable, frequency_variable).simplify();
-            } catch (...) {}
+            } catch (const std::exception&) {}
         }
     }
 
@@ -148,20 +148,19 @@ SymbolicExpression fourier_transform_impl_uncached(const SymbolicExpression& exp
                     SymbolicExpression F_w = fourier_transform_impl(right, time_variable, frequency_variable);
                     SymbolicExpression dF_dw = F_w.derivative(frequency_variable).simplify();
                     return make_multiply(SymbolicExpression::variable("i"), dF_dw).simplify();
-                } catch (...) {}
+                } catch (const std::exception&) {}
             } else if (right.is_variable_named(time_variable)) {
                 try {
                     SymbolicExpression F_w = fourier_transform_impl(left, time_variable, frequency_variable);
                     SymbolicExpression dF_dw = F_w.derivative(frequency_variable).simplify();
                     return make_multiply(SymbolicExpression::variable("i"), dF_dw).simplify();
-                } catch (...) {}
+                } catch (const std::exception&) {}
             }
 
             // Frequency shift / modulation: exp(i * w0 * t) * f(t) -> F(omega - w0)
             auto try_freq_shift = [&](const SymbolicExpression& exp_term, const SymbolicExpression& other_term) -> bool {
                 if (exp_term.node_ && exp_term.node_->type == NodeType::kFunction && exp_term.node_->text == "exp") {
                     SymbolicExpression exp_arg(exp_term.node_->left);
-                    Scalar factor = Scalar(1.0L);
                     if (exp_arg.node_ && exp_arg.node_->type == NodeType::kMultiply) {
                         Scalar coeff = Scalar(0.0L);
                         if (decompose_i_times_variable(exp_arg, time_variable, &coeff)) {
@@ -172,7 +171,7 @@ SymbolicExpression fourier_transform_impl_uncached(const SymbolicExpression& exp
                                     SymbolicExpression::number(coeff)).simplify();
                                 linear_result = F_w.substitute(frequency_variable, shifted_w).simplify();
                                 return true;
-                            } catch (...) {}
+                            } catch (const std::exception&) {}
                         }
                     }
                 }
@@ -439,7 +438,7 @@ SymbolicExpression inverse_fourier_transform_impl_uncached(const SymbolicExpress
         if (rule.matcher && rule.transformer && rule.matcher(simplified, frequency_variable)) {
             try {
                 return rule.transformer(simplified, frequency_variable, time_variable).simplify();
-            } catch (...) {}
+            } catch (const std::exception&) {}
         }
     }
 

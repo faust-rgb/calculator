@@ -19,7 +19,6 @@
 #include "module/calculator_module.h"
 #include "types/scalar_type.h"
 
-class ServiceLocator;
 
 namespace analysis_cmds {
 
@@ -33,7 +32,7 @@ public:
     std::vector<std::string> get_commands() const override;
     std::string execute_args_view(std::string_view command,
                                   const std::vector<std::string_view>& args,
-                                  ::ServiceLocator& locator) override;
+                                  ::ModuleServices& module_services) override;
     std::string get_help_snippet(const std::string& topic) const override;
 };
 

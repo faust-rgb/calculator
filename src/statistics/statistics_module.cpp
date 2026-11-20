@@ -5,15 +5,14 @@
 
 #include "statistics_module.h"
 #include "core/services/core_manager_interfaces.h"
-#include "core/services/service_locator.h"
 #include "math/functions/integer/integer_helpers.h"
 #include "matrix/matrix.h"
 #include "matrix/matrix_internal.h"
 
 std::string StatisticsModule::execute_args(const std::string& command,
                                            const std::vector<std::string>& args,
-                                           ServiceLocator& locator) {
-    auto services = locator.resolve<CoreServices>();
+                                           ModuleServices& module_services) {
+    auto* services = &module_services.core;
 
     // 解析参数并提取数据向量
     std::vector<Scalar> data;
@@ -56,7 +55,7 @@ StatisticsModule::get_functions_map() const {
 
     auto wrap_scalar = [](Scalar val) -> StoredValue {
         StoredValue res;
-        res.decimal = val;
+        res.set_decimal(val);
         res.exact = false;
         return res;
     };
@@ -116,7 +115,7 @@ StatisticsModule::get_functions_map() const {
             auto v = stats_ops::extract_vector(args[i]);
             data.insert(data.end(), v.begin(), v.end());
         }
-        return wrap_scalar(stats::percentile(data, args[0].decimal));
+        return wrap_scalar(stats::percentile(data, args[0].get_decimal()));
     };
     funcs["quartile"] = [wrap_scalar](const std::vector<StoredValue>& args) {
         if (args.size() < 2) throw std::runtime_error("quartile expects q and data");
@@ -126,14 +125,14 @@ StatisticsModule::get_functions_map() const {
             return wrap_scalar(stats::quartile(stats_ops::extract_vector(args[0]),
                                                static_cast<int>(round_to_long_long(args[1].get_decimal()))));
         }
-        if (!is_integer_double(static_cast<long double>(args[0].decimal)))
+        if (!is_integer_double(static_cast<long double>(args[0].get_decimal())))
             throw std::runtime_error("quartile q must be an integer");
         std::vector<Scalar> data;
         for (std::size_t i = 1; i < args.size(); ++i) {
             auto v = stats_ops::extract_vector(args[i]);
             data.insert(data.end(), v.begin(), v.end());
         }
-        return wrap_scalar(stats::quartile(data, static_cast<int>(static_cast<long double>(args[0].decimal))));
+        return wrap_scalar(stats::quartile(data, static_cast<int>(static_cast<long double>(args[0].get_decimal()))));
     };
     funcs["skewness"] = [wrap_scalar, get_all_data](const std::vector<StoredValue>& args) {
         return wrap_scalar(stats::skewness(get_all_data(args)));
@@ -165,7 +164,7 @@ StatisticsModule::get_functions_map() const {
     // 假设检验
     funcs["t_test"] = [wrap_scalar, get_all_data](const std::vector<StoredValue>& args) {
         if (args.empty()) throw std::runtime_error("t_test expects mu0 and data");
-        Scalar mu0 = args[0].decimal;
+        Scalar mu0 = args[0].get_decimal();
         std::vector<StoredValue> data_args(args.begin() + 1, args.end());
         return wrap_scalar(stats::t_test(mu0, get_all_data(data_args)));
     };
@@ -182,24 +181,24 @@ StatisticsModule::get_functions_map() const {
 
     // 概率分布与随机采样
     auto normal_cdf_fn = [wrap_scalar](const std::vector<StoredValue>& args) {
-        if (args.size() == 1) return wrap_scalar(prob::normal_cdf(args[0].decimal, 0, 1));
-        if (args.size() == 3) return wrap_scalar(prob::normal_cdf(args[0].decimal, args[1].decimal, args[2].decimal));
+        if (args.size() == 1) return wrap_scalar(prob::normal_cdf(args[0].get_decimal(), 0, 1));
+        if (args.size() == 3) return wrap_scalar(prob::normal_cdf(args[0].get_decimal(), args[1].get_decimal(), args[2].get_decimal()));
         throw std::runtime_error("pnorm(x, [mean, sd]) expects 1 or 3 arguments");
     };
     funcs["pnorm"] = normal_cdf_fn;
     funcs["cdf_normal"] = normal_cdf_fn;
 
     auto inv_normal_cdf_fn = [wrap_scalar](const std::vector<StoredValue>& args) {
-        if (args.size() == 1) return wrap_scalar(prob::inv_normal_cdf(args[0].decimal, 0, 1));
-        if (args.size() == 3) return wrap_scalar(prob::inv_normal_cdf(args[0].decimal, args[1].decimal, args[2].decimal));
+        if (args.size() == 1) return wrap_scalar(prob::inv_normal_cdf(args[0].get_decimal(), 0, 1));
+        if (args.size() == 3) return wrap_scalar(prob::inv_normal_cdf(args[0].get_decimal(), args[1].get_decimal(), args[2].get_decimal()));
         throw std::runtime_error("qnorm(p, [mean, sd]) expects 1 or 3 arguments");
     };
     funcs["qnorm"] = inv_normal_cdf_fn;
     funcs["inv_cdf_normal"] = inv_normal_cdf_fn;
 
     auto normal_pdf_fn = [wrap_scalar](const std::vector<StoredValue>& args) {
-        if (args.size() == 1) return wrap_scalar(prob::normal_pdf(args[0].decimal, 0, 1));
-        if (args.size() == 3) return wrap_scalar(prob::normal_pdf(args[0].decimal, args[1].decimal, args[2].decimal));
+        if (args.size() == 1) return wrap_scalar(prob::normal_pdf(args[0].get_decimal(), 0, 1));
+        if (args.size() == 3) return wrap_scalar(prob::normal_pdf(args[0].get_decimal(), args[1].get_decimal(), args[2].get_decimal()));
         throw std::runtime_error("pdf_normal(x, [mean, sd]) expects 1 or 3 arguments");
     };
     funcs["dnorm"] = normal_pdf_fn;
@@ -299,11 +298,89 @@ StatisticsModule::get_functions_map() const {
         const auto fit = matrix::internal::linear_regression_fit(stats_ops::extract_vector(args[0]),
                                                                  stats_ops::extract_vector(args[1]));
         StoredValue res;
-        res.is_matrix = true;
         std::vector<Scalar> coeffs;
         coeffs.push_back(fit.first);
         coeffs.push_back(fit.second);
-        res.matrix_ptr = std::make_shared<matrix::Matrix>(matrix::Matrix::vector(coeffs));
+        res.set_matrix_ptr(std::make_shared<matrix::Matrix>(matrix::Matrix::vector(coeffs)));
+        return res;
+    };
+
+    // 别名与补充统计量
+    funcs["skew"] = funcs["skewness"];
+    funcs["kurt"] = funcs["kurtosis"];
+    funcs["pearson"] = funcs["corr"];
+    funcs["sample_covariance"] = funcs["cov"];
+    funcs["cdf_norm"] = funcs["cdf_normal"];
+    funcs["pdf_norm"] = funcs["pdf_normal"];
+    funcs["inv_cdf_norm"] = funcs["inv_cdf_normal"];
+
+    funcs["q1"] = [wrap_scalar](const std::vector<StoredValue>& args) {
+        if (args.empty()) throw std::runtime_error("q1 expects data");
+        return wrap_scalar(stats::quartile(stats_ops::extract_vector(args[0]), 1));
+    };
+    funcs["q3"] = [wrap_scalar](const std::vector<StoredValue>& args) {
+        if (args.empty()) throw std::runtime_error("q3 expects data");
+        return wrap_scalar(stats::quartile(stats_ops::extract_vector(args[0]), 3));
+    };
+    funcs["range"] = [wrap_scalar, get_all_data](const std::vector<StoredValue>& args) {
+        const auto data = get_all_data(args);
+        if (data.empty()) throw std::runtime_error("range expects at least 1 value");
+        Scalar min_v = data[0], max_v = data[0];
+        for (const auto& v : data) {
+            if (v < min_v) min_v = v;
+            if (v > max_v) max_v = v;
+        }
+        return wrap_scalar(max_v - min_v);
+    };
+    funcs["geo_mean"] = funcs["geometric_mean"] = [wrap_scalar, get_all_data](const std::vector<StoredValue>& args) {
+        const auto data = get_all_data(args);
+        if (data.empty()) throw std::runtime_error("geometric_mean expects at least 1 value");
+        Scalar log_sum = 0;
+        for (const auto& v : data) {
+            if (v <= Scalar(0)) throw std::runtime_error("geometric_mean requires positive values");
+            log_sum += mymath::ln(v);
+        }
+        return wrap_scalar(mymath::exp(log_sum / Scalar(static_cast<long double>(data.size()))));
+    };
+    funcs["harmonic_mean"] = [wrap_scalar, get_all_data](const std::vector<StoredValue>& args) {
+        const auto data = get_all_data(args);
+        if (data.empty()) throw std::runtime_error("harmonic_mean expects at least 1 value");
+        Scalar recip_sum = 0;
+        for (const auto& v : data) {
+            if (v <= Scalar(0)) throw std::runtime_error("harmonic_mean requires positive values");
+            recip_sum += Scalar(1.0L) / v;
+        }
+        return wrap_scalar(Scalar(static_cast<long double>(data.size())) / recip_sum);
+    };
+    funcs["moment"] = [wrap_scalar](const std::vector<StoredValue>& args) {
+        if (args.size() < 2) throw std::runtime_error("moment expects k and data");
+        int k = static_cast<int>(round_to_long_long(args[0].get_decimal()));
+        if (k < 1) throw std::runtime_error("moment order must be >= 1");
+        std::vector<Scalar> data;
+        for (std::size_t i = 1; i < args.size(); ++i) {
+            auto v = stats_ops::extract_vector(args[i]);
+            data.insert(data.end(), v.begin(), v.end());
+        }
+        if (data.empty()) throw std::runtime_error("moment expects at least 1 data point");
+        Scalar m = stats::mean(data);
+        Scalar sum_k = 0;
+        for (const auto& v : data) {
+            sum_k += mymath::pow(v - m, Scalar(k));
+        }
+        return wrap_scalar(sum_k / Scalar(static_cast<long double>(data.size())));
+    };
+    funcs["zscore"] = [](const std::vector<StoredValue>& args) -> StoredValue {
+        if (args.empty()) throw std::runtime_error("zscore expects a dataset");
+        auto data = stats_ops::extract_vector(args[0]);
+        if (data.size() < 2) throw std::runtime_error("zscore expects at least 2 values");
+        Scalar m = stats::mean(data);
+        Scalar s = stats::stddev(data);
+        if (mymath::is_near_zero(s, 1e-15L)) throw std::runtime_error("zscore standard deviation is zero");
+        std::vector<Scalar> z;
+        z.reserve(data.size());
+        for (const auto& v : data) z.push_back((v - m) / s);
+        StoredValue res;
+        res.set_matrix_ptr(std::make_shared<matrix::Matrix>(matrix::Matrix::vector(std::move(z))));
         return res;
     };
 
@@ -311,17 +388,12 @@ StatisticsModule::get_functions_map() const {
 }
 
 std::vector<std::string> StatisticsModule::get_function_names() const {
-    static const std::vector<std::string> names = {
-        "avg", "bernoulli", "binom_cdf", "binom_pmf", "cdf_beta", "cdf_chi2",
-        "cdf_exp", "cdf_f", "cdf_gamma", "cdf_norm", "cdf_normal", "cdf_t",
-        "chi2_test", "corr", "correlation", "cov", "covariance", "gamma",
-        "geo_mean", "geometric_mean", "harmonic_mean", "iqr", "kurt", "kurtosis",
-        "lagrange", "lgamma", "linear_regression", "mad", "max", "mean", "median",
-        "min", "mode", "moment", "pdf_beta", "pdf_chi2", "pdf_exp", "pdf_f",
-        "pdf_gamma", "pdf_norm", "pdf_normal", "pdf_t", "pearson", "poisson_cdf",
-        "poisson_pmf", "q1", "q3", "rand", "randint", "randn", "range",
-        "sample_covariance", "sample_std", "sample_var", "skew", "skewness",
-        "spearman", "std", "sum", "t_test", "t_test2", "var", "zscore"
-    };
+    const auto map = get_functions_map();
+    std::vector<std::string> names;
+    names.reserve(map.size());
+    for (const auto& [name, _] : map) {
+        names.push_back(name);
+    }
+    std::sort(names.begin(), names.end());
     return names;
 }

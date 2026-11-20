@@ -83,7 +83,7 @@ FilterCoefficients design_fir(int order,
 
     // 滤波器长度 = 阶数 + 1
     const std::size_t length = static_cast<std::size_t>(order + 1);
-    const int half = order / 2;
+    const Scalar tau = Scalar(order) / Scalar(2.0L);
 
     // 归一化截止频率（0 到 0.5 对应 0 到 Nyquist）
     const Scalar fc = cutoff / 2.0;
@@ -95,16 +95,16 @@ FilterCoefficients design_fir(int order,
     std::vector<Scalar> h(length);
 
     if (type == FilterType::LowPass) {
-        // 低通：h[n] = 2*fc*sinc(2*fc*(n-M/2))
-        for (int n = 0; n <= order; ++n) {
-            const Scalar x = (n - half);
+        // 低通：h[n] = 2*fc*sinc(2*fc*(n - tau))
+        for (std::size_t n = 0; n < length; ++n) {
+            const Scalar x = Scalar(static_cast<long long>(n)) - tau;
             h[n] = 2.0 * fc * sinc_scalar(2.0 * fc * x);
         }
     } else if (type == FilterType::HighPass) {
-        // 高通：h[n] = delta(n-M/2) - 2*fc*sinc(2*fc*(n-M/2))
-        for (int n = 0; n <= order; ++n) {
-            const Scalar x = (n - half);
-            h[n] = (n == half ? 1.0L : 0.0L) - 2.0 * fc * sinc_scalar(2.0 * fc * x);
+        // 高通：h[n] = sinc(n - tau) - 2*fc*sinc(2*fc*(n - tau))
+        for (std::size_t n = 0; n < length; ++n) {
+            const Scalar x = Scalar(static_cast<long long>(n)) - tau;
+            h[n] = sinc_scalar(x) - 2.0 * fc * sinc_scalar(2.0 * fc * x);
         }
     } else {
         throw std::runtime_error("Use design_fir_band for bandpass/bandstop filters");
@@ -131,7 +131,7 @@ FilterCoefficients design_fir_band(int order,
     }
 
     const std::size_t length = static_cast<std::size_t>(order + 1);
-    const int half = order / 2;
+    const Scalar tau = Scalar(order) / Scalar(2.0L);
 
     const Scalar fc1 = cutoff_low / 2.0;
     const Scalar fc2 = cutoff_high / 2.0;
@@ -140,19 +140,16 @@ FilterCoefficients design_fir_band(int order,
     std::vector<Scalar> h(length);
 
     if (type == FilterType::BandPass) {
-        // 带通 = 高通(fc1) - 高通(fc2) = 低通(fc2) - 低通(fc1)
-        for (int n = 0; n <= order; ++n) {
-            const Scalar x = (n - half);
-            h[n] = 2.0 * (fc2 - fc1) * sinc_scalar((fc2 - fc1) * x) *
-                   (mymath::cos((kPiScalar) * (fc2 + fc1) * x));
+        // 带通 = 低通(fc2) - 低通(fc1)
+        for (std::size_t n = 0; n < length; ++n) {
+            const Scalar x = Scalar(static_cast<long long>(n)) - tau;
+            h[n] = 2.0 * fc2 * sinc_scalar(2.0 * fc2 * x) - 2.0 * fc1 * sinc_scalar(2.0 * fc1 * x);
         }
     } else if (type == FilterType::BandStop) {
-        // 带阻 = 低通(fc1) + 高通(fc2)
-        for (int n = 0; n <= order; ++n) {
-            const Scalar x = (n - half);
-            h[n] = (n == half ? 1.0L : 0.0L) -
-                   2.0 * (fc2 - fc1) * sinc_scalar((fc2 - fc1) * x) *
-                   (mymath::cos((kPiScalar) * (fc2 + fc1) * x));
+        // 带阻 = 全通 - 带通 = sinc(x) - (低通(fc2) - 低通(fc1))
+        for (std::size_t n = 0; n < length; ++n) {
+            const Scalar x = Scalar(static_cast<long long>(n)) - tau;
+            h[n] = sinc_scalar(x) - (2.0 * fc2 * sinc_scalar(2.0 * fc2 * x) - 2.0 * fc1 * sinc_scalar(2.0 * fc1 * x));
         }
     } else {
         throw std::runtime_error("Use design_fir for lowpass/highpass filters");
@@ -183,12 +180,17 @@ static void bilinear(const std::vector<Complex>& s_zeros,
     const std::size_t n_zeros = s_zeros.size();
     const std::size_t n_poles = s_poles.size();
 
-    std::vector<Complex> z_zeros(n_zeros);
-    std::vector<Complex> z_poles(n_poles);
-
+    std::vector<Complex> z_zeros;
+    z_zeros.reserve(n_poles);
     for (std::size_t i = 0; i < n_zeros; ++i) {
-        z_zeros[i] = bilinear_transform(s_zeros[i], fs);
+        z_zeros.push_back(bilinear_transform(s_zeros[i], fs));
     }
+    // 模拟全极点滤波器在 s=infinity 处的零点映射为数字零点 z = -1
+    for (std::size_t i = n_zeros; i < n_poles; ++i) {
+        z_zeros.push_back(Complex(-1.0L, 0.0L));
+    }
+
+    std::vector<Complex> z_poles(n_poles);
     for (std::size_t i = 0; i < n_poles; ++i) {
         z_poles[i] = bilinear_transform(s_poles[i], fs);
     }
@@ -210,13 +212,21 @@ static void bilinear(const std::vector<Complex>& s_zeros,
     std::vector<Complex> b_complex = poly_from_roots(z_zeros);
     std::vector<Complex> a_complex = poly_from_roots(z_poles);
 
-    // 归一化
-    Complex gain = a_complex[0];
-    for (Complex& c : b_complex) {
-        c /= gain;
+    // 归一化 a[0] = 1
+    Complex a0 = a_complex[0];
+    if (mymath::abs(a0) > Scalar(1e-15L)) {
+        for (Complex& c : b_complex) c /= a0;
+        for (Complex& c : a_complex) c /= a0;
     }
-    for (Complex& c : a_complex) {
-        c /= gain;
+
+    // 直流增益归一化 (H(1) = sum(b)/sum(a) -> 1.0)
+    Complex dc_num = Complex(0.0L, 0.0L);
+    Complex dc_den = Complex(0.0L, 0.0L);
+    for (const auto& c : b_complex) dc_num += c;
+    for (const auto& c : a_complex) dc_den += c;
+    if (mymath::abs(dc_num) > Scalar(1e-15L) && mymath::abs(dc_den) > Scalar(1e-15L)) {
+        Complex dc_gain = dc_num / dc_den;
+        for (Complex& c : b_complex) c /= dc_gain;
     }
 
     // 提取实部（应该都是实数）

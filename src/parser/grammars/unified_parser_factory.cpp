@@ -9,22 +9,6 @@
 #include <cctype>
 #include <algorithm>
 
-// ============================================================================
-// 解析器选择
-// ============================================================================
-
-ParserKind UnifiedParserFactory::select_parser(const std::string& expression, const ParseContext& ctx) {
-    AnalysisResult result = analyze(expression);
-    if (ctx.exact_mode) return ParserKind::kExact;
-    if (ctx.need_symbolic) return ParserKind::kSymbolic;
-    if (!ctx.allow_matrix &&
-        (result.has_bracket || result.has_matrix_func || result.has_matrix_or_complex_var)) {
-        return ParserKind::kScalar;
-    }
-    if (!ctx.allow_complex && result.has_standalone_i) return ParserKind::kScalar;
-    return result.parser;
-}
-
 ExpressionFeature UnifiedParserFactory::analyze_features(const std::string& expression) {
     AnalysisResult result = analyze(expression);
     return result.features;
@@ -49,23 +33,9 @@ UnifiedParserFactory::AnalysisResult UnifiedParserFactory::analyze(
     const VariableResolver* variables) {
 
     AnalysisResult result;
-    result.parser = ParserKind::kUnknown;
-    result.hint = ExpressionHint::kUnknown;
-    result.features = ExpressionFeature::kNone;
-    result.has_standalone_i = false;
-    result.has_bracket = false;
-    result.has_matrix_func = false;
-    result.has_rat_call = false;
-    result.has_string = false;
-    result.has_assignment = false;
-    result.has_matrix_or_complex_var = false;
-    result.ast_valid = false;
-    result.paren_depth = 0;
-    result.bracket_depth = 0;
 
     // 快速路径：空表达式
     if (expression.empty()) {
-        result.parser = ParserKind::kScalar;
         result.hint = ExpressionHint::kScalar;
         return result;
     }
@@ -85,7 +55,6 @@ UnifiedParserFactory::AnalysisResult UnifiedParserFactory::analyze(
             }
         }
         if (valid) {
-            result.parser = ParserKind::kStringLiteral;
             result.hint = ExpressionHint::kStringLiteral;
             result.has_string = true;
             result.features = result.features | ExpressionFeature::kHasString;
@@ -104,14 +73,13 @@ UnifiedParserFactory::AnalysisResult UnifiedParserFactory::analyze(
         }
     }
     if (is_identifier) {
-        result.parser = ParserKind::kIdentifier;
         result.hint = ExpressionHint::kIdentifier;
         result.features = result.features | ExpressionFeature::kHasIdentifier;
 
         // 检查单个标识符是否是矩阵/复数变量
         if (variables) {
             const StoredValue* found = variables->lookup(expression);
-            if (found && (found->is_matrix || found->is_complex)) {
+            if (found && (found->is_matrix() || found->is_complex())) {
                 result.has_matrix_or_complex_var = true;
             }
         }
@@ -150,7 +118,7 @@ UnifiedParserFactory::AnalysisResult UnifiedParserFactory::analyze(
                 // 检查是否引用了矩阵/复数变量
                 if (variables && !result.has_matrix_or_complex_var) {
                     const StoredValue* found = variables->lookup(std::string(tok.text));
-                    if (found && (found->is_matrix || found->is_complex)) {
+                    if (found && (found->is_matrix() || found->is_complex())) {
                         result.has_matrix_or_complex_var = true;
                     }
                 }
@@ -200,24 +168,19 @@ UnifiedParserFactory::AnalysisResult UnifiedParserFactory::analyze(
         }
     }
 
-    // 决定解析器类型
+    // 单次编译 ExpressionAST 并缓存于 AnalysisResult，供后续求值直接复用
     if (result.has_rat_call) {
-        result.parser = ParserKind::kRatCall;
         result.hint = ExpressionHint::kRatCall;
-    } else if ((result.ast_valid = compile_expression_ast(expression) != nullptr)) {
-        // 语法有效的表达式统一使用 ExpressionAST；特征只作为结果类型
-        // 提示，不再决定解析器实现。
-        result.parser = ParserKind::kUnifiedExpression;
+    } else if ((result.compiled_ast = compile_expression_ast(expression)) != nullptr) {
+        result.ast_valid = true;
         if (result.has_bracket || result.has_matrix_func || result.has_matrix_or_complex_var) {
             result.hint = ExpressionHint::kMatrixCandidate;
         } else if (result.has_standalone_i) {
             result.hint = ExpressionHint::kComplexCandidate;
         }
     } else if (result.has_assignment) {
-        result.parser = ParserKind::kScalar;
         result.hint = ExpressionHint::kAssignment;
     } else {
-        result.parser = ParserKind::kScalar;
         result.hint = ExpressionHint::kScalar;
     }
 

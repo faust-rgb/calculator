@@ -6,6 +6,7 @@
 // ============================================================================
 
 #include "format_utils.h"
+#include "core/common/display_precision.h"
 #include "types/scalar_type.h"
 #include "core/api/calculator_impl.h"
 #include "math/functions/integer/integer_helpers.h"
@@ -222,8 +223,7 @@ namespace {
  * @return 静态精度值的引用
  */
 int& mutable_process_display_precision() {
-    static thread_local int precision = kDefaultDisplayPrecision;
-    return precision;
+    return display_precision::mutable_value();
 }
 
 /**
@@ -250,8 +250,7 @@ int process_display_precision() {
  * @param precision 新的显示精度值，将被限制在 [kMinDisplayPrecision, kMaxDisplayPrecision] 范围内
  */
 void set_process_display_precision(int precision) {
-    mutable_process_display_precision() =
-        std::clamp(precision, kMinDisplayPrecision, kMaxDisplayPrecision);
+    mutable_process_display_precision() = display_precision::clamp(precision);
 }
 
 // ============================================================================
@@ -472,27 +471,27 @@ std::string format_term(Scalar coefficient, const std::string& factor) {
  * - 其他：使用小数格式
  */
 std::string format_stored_value(const StoredValue& value, bool symbolic_constants_mode) {
-    if (value.is_string) {
-        return "\"" + value.string_value + "\"";
+    if (value.is_string()) {
+        return "\"" + value.get_string_value() + "\"";
     }
-    if (value.is_list) {
+    if (value.is_list()) {
         std::ostringstream out;
         out << "[";
-        if (value.list_value) {
-            for (std::size_t i = 0; i < value.list_value->size(); ++i) {
+        if (value.get_list_value()) {
+            for (std::size_t i = 0; i < value.get_list_value()->size(); ++i) {
                 if (i != 0) out << ", ";
-                out << format_stored_value((*value.list_value)[i], symbolic_constants_mode);
+                out << format_stored_value((*value.get_list_value())[i], symbolic_constants_mode);
             }
         }
         out << "]";
         return out.str();
     }
-    if (value.is_dict) {
+    if (value.is_dict()) {
         std::ostringstream out;
         out << "{";
-        if (value.dict_value) {
+        if (value.get_dict_value()) {
             bool first = true;
-            for (const auto& [key, dict_value] : *value.dict_value) {
+            for (const auto& [key, dict_value] : *value.get_dict_value()) {
                 if (!first) out << ", ";
                 first = false;
                 out << format_dict_key(key) << ": "
@@ -544,8 +543,8 @@ std::string format_stored_value(const StoredValue& value, bool symbolic_constant
  * - 其他类型使用 format_stored_value
  */
 std::string format_print_value(const StoredValue& value, bool symbolic_constants_mode) {
-    if (value.is_string) {
-        return value.string_value;
+    if (value.is_string()) {
+        return value.get_string_value();
     }
     return format_stored_value(value, symbolic_constants_mode);
 }

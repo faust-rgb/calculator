@@ -219,24 +219,21 @@ size_t sub_raw_simd(const uint32_t* a, size_t an,
 
 class BatchAdder {
 public:
-    BatchAdder(size_t capacity) : capacity_(std::max<size_t>(capacity, 16)) {
-        temp_ = new uint64_t[capacity_ + 16];
-        std::fill(temp_, temp_ + capacity_ + 16, 0);
-        size_ = 0;
-    }
+    explicit BatchAdder(size_t capacity)
+        : temp_(std::max<size_t>(capacity, 16) + 16, 0),
+          size_(0),
+          capacity_(std::max<size_t>(capacity, 16)) {}
 
-    ~BatchAdder() {
-        delete[] temp_;
-    }
+    ~BatchAdder() = default;
+    BatchAdder(const BatchAdder&) = delete;
+    BatchAdder& operator=(const BatchAdder&) = delete;
+    BatchAdder(BatchAdder&&) noexcept = default;
+    BatchAdder& operator=(BatchAdder&&) noexcept = default;
 
     void reserve(size_t new_cap) {
         if (new_cap > capacity_) {
             size_t new_capacity = std::max(new_cap, capacity_ * 2);
-            uint64_t* new_temp = new uint64_t[new_capacity + 16];
-            std::copy(temp_, temp_ + size_, new_temp);
-            std::fill(new_temp + size_, new_temp + new_capacity + 16, 0);
-            delete[] temp_;
-            temp_ = new_temp;
+            temp_.resize(new_capacity + 16, 0);
             capacity_ = new_capacity;
         }
     }
@@ -298,14 +295,14 @@ public:
         }
 
         // 重置缓冲区
-        std::fill(temp_, temp_ + size_, 0);
+        std::fill(temp_.begin(), temp_.begin() + size_, 0);
         size_ = 0;
 
         return out_size;
     }
 
 private:
-    uint64_t* temp_;
+    std::vector<uint64_t> temp_;
     size_t size_;
     size_t capacity_;
 };

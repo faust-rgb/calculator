@@ -46,7 +46,7 @@ inline long double numeric_tolerance() {
 }
 
 inline long double integer_tolerance() {
-    return std::pow(10.0L, -std::max(default_scale() / 2, 8));
+    return std::pow(10.0L, -std::clamp(default_scale() / 2, 8, 15));
 }
 
 inline long double loose_tolerance() {

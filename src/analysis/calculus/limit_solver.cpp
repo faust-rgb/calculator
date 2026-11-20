@@ -271,7 +271,7 @@ SymbolicLimitProbeKind probe_symbolic_value_at(
         }
         return value > Scalar(0) ? SymbolicLimitProbeKind::kPositiveInfinity
                                  : SymbolicLimitProbeKind::kNegativeInfinity;
-    } catch (...) {
+    } catch (const std::exception&) {
         return SymbolicLimitProbeKind::kUnknown;
     }
 }
@@ -381,7 +381,7 @@ bool try_symbolic_lhopital_limit(
                 info.coefficient = ex.leading_coefficient;
                 info.valid = true;
                 return info;
-            } catch (...) {
+            } catch (const std::exception&) {
             }
             return info;
         };
@@ -403,7 +403,7 @@ bool try_symbolic_lhopital_limit(
                 try {
                     *result = handle_pole_limit(res_degree, res_coeff, direction);
                     return true;
-                } catch (...) {
+                } catch (const std::exception&) {
                     return false;
                 }
             }
@@ -483,7 +483,7 @@ bool symbolic_limit_at_infinity(
         try {
             *result = handle_pole_limit(e.shift, e.leading_coefficient, 1);
             return true;
-        } catch (...) {
+        } catch (const std::exception&) {
         }
     }
 

@@ -41,6 +41,7 @@ public:
 
     std::vector<std::string> get_commands() const override {
         return {":assume", "simplify", "expand", "cse", "groebner", "latex", "to_latex",
+                "solve_symbolic", "solve_eqn", "solve_system",
                 "jacobian", "hessian", "dsolve", "sum",
                 "smith", "snf", "hermite", "hnf",
                 "symbolic_lu", "sym_lu", "symbolic_qr", "sym_qr",
@@ -51,9 +52,9 @@ public:
 
     std::string execute_args(const std::string& command,
                              const std::vector<std::string>& args,
-                             ServiceLocator& locator) override;
+                             ModuleServices& module_services) override;
 
-    void register_services(CoreServices& services, ServiceLocator& locator) override;
+    void register_services(CoreServices& services, IExecutionContext& execution) override;
 
     std::string get_help_snippet(const std::string& topic) const override;
 };

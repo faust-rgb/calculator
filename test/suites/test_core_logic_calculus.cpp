@@ -1207,6 +1207,43 @@ int run_logic_calculus_tests(int& passed, int& failed) {
                           << " threw unexpected error: " << ex.what() << '\n';
             }
         }
+        // ========== 微分与积分增强测试 ==========
+        const std::vector<std::pair<std::string, std::string>> calculus_enhanced_cases = {
+            {"diff(digamma(x))", "polygamma(1, x)"},
+            {"diff(polygamma(1, x))", "polygamma(2, x)"},
+            {"diff(lambertw(x))", "lambertw(x) / (x * (lambertw(x) + 1))"},
+            {"diff(sinc(x))", "(cos(x) - sinc(x)) / x"},
+            {"diff(heaviside(x))", "delta(x)"},
+            {"diff(atan2(y, x), y)", "x / (x ^ 2 + y ^ 2)"},
+            {"diff(atan2(y, x), x)", "-y / (x ^ 2 + y ^ 2)"},
+            {"diff(min(x, y), x)", "step(-x + y)"},
+            {"diff(max(x, y), x)", "step(-y + x)"},
+            {"diff(besseli(0, x))", "besseli(1, x)"},
+            {"integral(sec(x) ^ 3, x)", "1/2 * (ln(abs(sec(x) + tan(x))) + sec(x) * tan(x)) + C"},
+            {"integral(sin(x) ^ 4, x)", "-(1/2 * cos(x) * sin(x)) + 1/32 * sin(4 * x) + 3/8 * x + C"},
+            {"integral(cos(x) ^ 4, x)", "1/32 * sin(4 * x) + 1/2 * cos(x) * sin(x) + 3/8 * x + C"},
+            {"integral(sin(x) * cos(x), x)", "1/2 * sin(x) ^ 2 + C"},
+        };
+
+        for (const auto& test : calculus_enhanced_cases) {
+            try {
+                std::string output;
+                const bool handled =
+                    regression_calculator.try_process_function_command(test.first, &output);
+                if (handled && output == test.second) {
+                    ++passed;
+                } else {
+                    ++failed;
+                    std::cout << "FAIL: calculus enhanced " << test.first
+                              << " expected " << test.second << " got "
+                              << output << '\n';
+                }
+            } catch (const std::exception& ex) {
+                ++failed;
+                std::cout << "FAIL: calculus enhanced " << test.first
+                          << " threw unexpected error: " << ex.what() << '\n';
+            }
+        }
     }
 
     return 0;

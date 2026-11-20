@@ -156,6 +156,7 @@ float128_t operator/(float128_t a, float128_t b) {
 }
 
 bool operator==(float128_t a, float128_t b) {
+    if (float128::isnan(a) || float128::isnan(b)) return false;
     return a.hi == b.hi && a.lo == b.lo;
 }
 
@@ -164,6 +165,7 @@ bool operator!=(float128_t a, float128_t b) {
 }
 
 bool operator<(float128_t a, float128_t b) {
+    if (float128::isnan(a) || float128::isnan(b)) return false;
     return a.hi < b.hi || (a.hi == b.hi && a.lo < b.lo);
 }
 
@@ -871,6 +873,20 @@ std::istream& operator>>(std::istream& is, float128_t& a) {
     return is;
 }
 
+inline float128_t pow10_int(int exp) {
+    if (exp == 0) return float128_t(1.0L);
+    if (exp < 0) return float128_t(1.0L) / pow10_int(-exp);
+    float128_t res(1.0L);
+    float128_t base(10.0L);
+    int e = exp;
+    while (e > 0) {
+        if (e & 1) res = res * base;
+        if (e > 1) base = base * base;
+        e >>= 1;
+    }
+    return res;
+}
+
 std::string to_string(float128_t a, int precision) {
     if (float128::isnan(a)) return "nan";
     if (float128::isinf(a)) return a.hi > 0 ? "inf" : "-inf";
@@ -885,15 +901,14 @@ std::string to_string(float128_t a, int precision) {
     // Use scientific notation for very large or very small numbers
     if (a.hi >= 1e18L || (a.hi > 0 && a.hi < 1e-10L)) {
         // Calculate exponent: find e such that 1 <= a * 10^(-e) < 10
-        int exponent = 0;
-        float128_t temp = a;
+        int exponent = static_cast<int>(std::floor(std::log10(a.hi)));
+        float128_t temp = (exponent >= 0) ? (a / pow10_int(exponent)) : (a * pow10_int(-exponent));
 
-        // Handle large numbers
+        // Refine with small steps (usually 0 or 1 iteration)
         while (temp.hi >= 10.0L) {
             temp = temp / 10.0L;
             exponent++;
         }
-        // Handle small numbers
         while (temp.hi > 0 && temp.hi < 1.0L) {
             temp = temp * 10.0L;
             exponent--;
@@ -980,11 +995,15 @@ float128_t from_string(const std::string& s) {
 
     if (i < s.size() && s[i] == '.') {
         i++;
-        float128_t divisor(10.0L);
+        float128_t frac_part(0.0L);
+        int frac_digits = 0;
         while (i < s.size() && std::isdigit(s[i])) {
-            result += float128_t(static_cast<long double>(s[i] - '0')) / divisor;
-            divisor = divisor * 10.0L;
+            frac_part = frac_part * 10.0L + float128_t(static_cast<long double>(s[i] - '0'));
+            frac_digits++;
             i++;
+        }
+        if (frac_digits > 0) {
+            result += frac_part / pow10_int(frac_digits);
         }
     }
 
@@ -1003,7 +1022,11 @@ float128_t from_string(const std::string& s) {
             i++;
         }
         if (exp_val != 0) {
-            result = result * float128::pow(float128_t(10.0L), float128_t(exp_val * exp_sign));
+            if (exp_sign < 0) {
+                result = result / pow10_int(exp_val);
+            } else {
+                result = result * pow10_int(exp_val);
+            }
         }
     }
 

@@ -36,7 +36,6 @@
  *
  * 封装所有多项式相关的命令处理逻辑，与计算器核心解耦。
  */
-class ServiceLocator;
 
 namespace polynomial_ops {
 
@@ -87,7 +86,7 @@ public:
      */
     std::string execute_args(const std::string& command,
                              const std::vector<std::string>& args,
-                             ServiceLocator& locator) override;
+                             ModuleServices& module_services) override;
 
     /**
      * @brief 获取多项式函数映射

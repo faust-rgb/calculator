@@ -215,6 +215,44 @@ int run_logic_integral_ode_tests(int& passed, int& failed) {
     }
 
     try {
+        std::string output;
+        const bool handled =
+            calculator.try_process_function_command(
+                "ode(\"y' = -y\", 0, 1, 1, 40)",
+                &output);
+        if (handled && nearly_equal(calculator.evaluate(output), 1.0L / mymath::exp(Scalar(1.0L)).to_long_double(), 1e-3)) {
+            ++passed;
+        } else {
+            ++failed;
+            std::cout << "FAIL: ode(\"y' = -y\", ...) returned unexpected output "
+                      << output << '\n';
+        }
+    } catch (const std::exception& ex) {
+        ++failed;
+        std::cout << "FAIL: ode equality syntax threw unexpected error: "
+                  << ex.what() << '\n';
+    }
+
+    try {
+        std::string output;
+        const bool handled =
+            calculator.try_process_function_command(
+                "ode(\"diff(y, x) = -y\", 0, 1, 1, 40)",
+                &output);
+        if (handled && nearly_equal(calculator.evaluate(output), 1.0L / mymath::exp(Scalar(1.0L)).to_long_double(), 1e-3)) {
+            ++passed;
+        } else {
+            ++failed;
+            std::cout << "FAIL: ode(\"diff(y, x) = -y\", ...) returned unexpected output "
+                      << output << '\n';
+        }
+    } catch (const std::exception& ex) {
+        ++failed;
+        std::cout << "FAIL: ode diff syntax threw unexpected error: "
+                  << ex.what() << '\n';
+    }
+
+    try {
         const std::string assigned =
             calculator.process_line(
                 "sys = ode_system_table(vec(y2, -y1), 0, vec(0, 1), 1.57079632679, 4)",

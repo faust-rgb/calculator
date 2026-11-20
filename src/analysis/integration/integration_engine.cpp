@@ -43,7 +43,7 @@ std::function<Scalar(const std::vector<Scalar>&)> make_scalar_bound_func(
     try {
         Scalar val = ctx.parse_decimal(bound_expr);
         return [val](const std::vector<Scalar>&) { return val; };
-    } catch (...) {}
+    } catch (const std::exception&) {}
     auto evaluator = ctx.build_scoped_evaluator(bound_expr);
     return [evaluator, var_names, current_dim](const std::vector<Scalar>& point) {
         std::vector<std::pair<std::string, Scalar>> scope;
@@ -186,7 +186,7 @@ Scalar double_integral(const IntegrationEngineContext& ctx,
         y0_c = ctx.parse_decimal(y0_expr);
         y1_c = ctx.parse_decimal(y1_expr);
         is_constant_bounds = true;
-    } catch (...) {}
+    } catch (const std::exception&) {}
 
     if (is_constant_bounds && method != "simpson") {
         auto integrand = [evaluate_expression, x_var, y_var](const std::vector<Scalar>& pt) {
@@ -272,7 +272,7 @@ Scalar triple_integral(const IntegrationEngineContext& ctx,
         y0_c = ctx.parse_decimal(y0_e); y1_c = ctx.parse_decimal(y1_e);
         z0_c = ctx.parse_decimal(z0_e); z1_c = ctx.parse_decimal(z1_e);
         is_constant_bounds = true;
-    } catch (...) {}
+    } catch (const std::exception&) {}
 
     if (is_constant_bounds && method != "simpson") {
         auto integrand = [evaluate_expression, x_v, y_v, z_v](const std::vector<Scalar>& pt) {

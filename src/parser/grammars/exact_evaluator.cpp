@@ -98,10 +98,10 @@ Rational lookup_variable_exact(const std::string& name, const VariableResolver& 
         }
         throw_ast_error<std::runtime_error>("unknown variable: " + name, pos);
     }
-    if (found->is_matrix || found->is_complex) {
+    if (found->is_matrix() || found->is_complex()) {
         throw_ast_error<ExactModeUnsupported>("matrix or complex variable " + name + " cannot be used exactly", pos);
     }
-    if (found->is_string) {
+    if (found->is_string()) {
         throw_ast_error<ExactModeUnsupported>("string variable " + name + " cannot be used exactly", pos);
     }
     if (!found->exact) {

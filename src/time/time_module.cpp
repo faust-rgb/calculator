@@ -11,7 +11,6 @@
 
 #include "time_module.h"
 #include "module/calculator_module.h"
-#include "core/services/service_locator.h"
 #include "core/services/core_manager_interfaces.h"
 #include "core/services/string_utils.h"
 
@@ -40,7 +39,7 @@ namespace {
  * @throws std::runtime_error 如果值不是标量类型
  */
 long double get_scalar(const StoredValue& val, const char* context) {
-    if (val.is_matrix || val.is_complex || val.is_string || val.is_list || val.is_dict) {
+    if (val.is_matrix() || val.is_complex() || val.is_string() || val.is_list() || val.is_dict()) {
         throw std::runtime_error(std::string(context) + " expects a scalar value");
     }
     return static_cast<long double>(val.get_decimal());
@@ -139,7 +138,7 @@ std::map<std::string, std::function<StoredValue(const std::vector<StoredValue>&)
         auto duration = now.time_since_epoch();
         long double seconds = std::chrono::duration<long double>(duration).count();
         StoredValue res;
-        res.decimal = seconds;
+        res.set_decimal(seconds);
         res.exact = false;
         return res;
     };
@@ -160,13 +159,12 @@ std::map<std::string, std::function<StoredValue(const std::vector<StoredValue>&)
         auto timestamp = std::chrono::system_clock::to_time_t(now);
 
         std::string fmt = "%Y-%m-%d %H:%M:%S";
-        if (!args.empty() && args[0].is_string) {
-            fmt = args[0].string_value;
+        if (!args.empty() && args[0].is_string()) {
+            fmt = args[0].get_string_value();
         }
 
         StoredValue res;
-        res.is_string = true;
-        res.string_value = format_time(fmt, timestamp, true);
+        res.set_string_value(format_time(fmt, timestamp, true));
         return res;
     };
 
@@ -184,13 +182,12 @@ std::map<std::string, std::function<StoredValue(const std::vector<StoredValue>&)
         auto timestamp = std::chrono::system_clock::to_time_t(now);
 
         std::string fmt = "%Y-%m-%d %H:%M:%S";
-        if (!args.empty() && args[0].is_string) {
-            fmt = args[0].string_value;
+        if (!args.empty() && args[0].is_string()) {
+            fmt = args[0].get_string_value();
         }
 
         StoredValue res;
-        res.is_string = true;
-        res.string_value = format_time(fmt, timestamp, false);
+        res.set_string_value(format_time(fmt, timestamp, false));
         return res;
     };
 
@@ -209,11 +206,11 @@ std::map<std::string, std::function<StoredValue(const std::vector<StoredValue>&)
         if (args.empty()) {
             throw std::runtime_error("strftime expects at least 1 argument (format)");
         }
-        if (!args[0].is_string) {
+        if (!args[0].is_string()) {
             throw std::runtime_error("strftime format must be a string");
         }
 
-        std::string format = args[0].string_value;
+        std::string format = args[0].get_string_value();
         std::time_t timestamp;
 
         if (args.size() > 1) {
@@ -225,8 +222,7 @@ std::map<std::string, std::function<StoredValue(const std::vector<StoredValue>&)
         }
 
         StoredValue res;
-        res.is_string = true;
-        res.string_value = format_time(format, timestamp, true);
+        res.set_string_value(format_time(format, timestamp, true));
         return res;
     };
 
@@ -245,11 +241,11 @@ std::map<std::string, std::function<StoredValue(const std::vector<StoredValue>&)
         if (args.empty()) {
             throw std::runtime_error("strftime_utc expects at least 1 argument (format)");
         }
-        if (!args[0].is_string) {
+        if (!args[0].is_string()) {
             throw std::runtime_error("strftime_utc format must be a string");
         }
 
-        std::string format = args[0].string_value;
+        std::string format = args[0].get_string_value();
         std::time_t timestamp;
 
         if (args.size() > 1) {
@@ -261,8 +257,7 @@ std::map<std::string, std::function<StoredValue(const std::vector<StoredValue>&)
         }
 
         StoredValue res;
-        res.is_string = true;
-        res.string_value = format_time(format, timestamp, false);
+        res.set_string_value(format_time(format, timestamp, false));
         return res;
     };
 
@@ -282,14 +277,14 @@ std::map<std::string, std::function<StoredValue(const std::vector<StoredValue>&)
         if (args.size() < 2) {
             throw std::runtime_error("strptime expects 2 arguments (time_string, format)");
         }
-        if (!args[0].is_string || !args[1].is_string) {
+        if (!args[0].is_string() || !args[1].is_string()) {
             throw std::runtime_error("strptime arguments must be strings");
         }
 
-        std::time_t timestamp = parse_time(args[0].string_value, args[1].string_value);
+        std::time_t timestamp = parse_time(args[0].get_string_value(), args[1].get_string_value());
 
         StoredValue res;
-        res.decimal = static_cast<long double>(timestamp);
+        res.set_decimal(static_cast<long double>(timestamp));
         res.exact = false;
         return res;
     };
@@ -311,7 +306,7 @@ std::map<std::string, std::function<StoredValue(const std::vector<StoredValue>&)
         long double seconds = std::chrono::duration<long double>(duration).count();
 
         StoredValue res;
-        res.decimal = seconds;
+        res.set_decimal(seconds);
         res.exact = false;
         return res;
     };
@@ -330,14 +325,14 @@ std::map<std::string, std::function<StoredValue(const std::vector<StoredValue>&)
             throw std::runtime_error("sleep expects 1 argument (seconds)");
         }
         long double seconds = get_scalar(args[0], "sleep duration");
-        if (seconds < 0) {
-            throw std::runtime_error("sleep duration must be non-negative");
+        if (!std::isfinite(seconds) || seconds < 0) {
+            throw std::runtime_error("sleep duration must be a finite non-negative number");
         }
 
         std::this_thread::sleep_for(std::chrono::duration<long double>(seconds));
 
         StoredValue res;
-        res.decimal = 1.0L;
+        res.set_decimal(1.0L);
         res.exact = false;
         return res;
     };
@@ -355,7 +350,7 @@ std::map<std::string, std::function<StoredValue(const std::vector<StoredValue>&)
         timers_[timer_id] = std::chrono::steady_clock::now();
 
         StoredValue res;
-        res.decimal = timer_id;
+        res.set_decimal(timer_id);
         res.exact = false;
         return res;
     };
@@ -385,7 +380,7 @@ std::map<std::string, std::function<StoredValue(const std::vector<StoredValue>&)
         long double elapsed = std::chrono::duration<long double>(now - it->second).count();
 
         StoredValue res;
-        res.decimal = elapsed;
+        res.set_decimal(elapsed);
         res.exact = false;
         return res;
     };
@@ -416,7 +411,7 @@ std::map<std::string, std::function<StoredValue(const std::vector<StoredValue>&)
         timers_.erase(it);
 
         StoredValue res;
-        res.decimal = elapsed;
+        res.set_decimal(elapsed);
         res.exact = false;
         return res;
     };
@@ -428,23 +423,22 @@ std::map<std::string, std::function<StoredValue(const std::vector<StoredValue>&)
 
 std::vector<std::string> TimeModule::get_function_names() const {
     static const std::vector<std::string> names = {
-        "clock", "now", "sleep", "strftime", "strptime", "time",
-        "timer_elapsed", "timer_start", "timer_stop"
+        "clock", "now", "sleep", "strftime", "strftime_utc", "strptime", "time",
+        "timer_elapsed", "timer_start", "timer_stop", "utctime"
     };
     return names;
 }
 
 std::string TimeModule::execute_args(const std::string& command,
                                      const std::vector<std::string>& args,
-                                     ServiceLocator& locator) {
-    auto services = locator.resolve<CoreServices>();
+                                     ModuleServices& module_services) {
+    auto* services = &module_services.core;
     std::vector<StoredValue> s_args;
     for (const auto& arg : args) {
         std::string parsed = trim_copy(arg);
         if (parsed.size() >= 2 && parsed.front() == '"' && parsed.back() == '"') {
             StoredValue sv;
-            sv.is_string = true;
-            sv.string_value = parsed.substr(1, parsed.size() - 2);
+            sv.set_string_value(parsed.substr(1, parsed.size() - 2));
             s_args.push_back(sv);
         } else {
             StoredValue sv = services->evaluation.evaluate_value(parsed, false);
@@ -456,8 +450,8 @@ std::string TimeModule::execute_args(const std::string& command,
     auto it = funcs.find(command);
     if (it != funcs.end()) {
         StoredValue res = it->second(s_args);
-        if (res.is_string) return res.string_value;
-        if (res.is_matrix && res.matrix_ptr) return res.matrix_ptr->to_string();
+        if (res.is_string()) return res.get_string_value();
+        if (res.is_matrix() && res.get_matrix_ptr()) return res.get_matrix_ptr()->to_string();
         return res.get_decimal().to_string();
     }
     throw std::runtime_error("Unknown time command: " + command);

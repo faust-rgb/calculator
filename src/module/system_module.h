@@ -23,7 +23,6 @@
 #include <string>
 #include <vector>
 
-class ServiceLocator;
 
 /**
  * @class SystemModule
@@ -65,7 +64,7 @@ public:
      */
     std::string execute_args_view(std::string_view command,
                                   const std::vector<std::string_view>& args,
-                                  ServiceLocator& locator) override;
+                                  ModuleServices& module_services) override;
     std::vector<std::string> get_help_topics() const override;
 
     /**

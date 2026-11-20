@@ -102,16 +102,14 @@ struct CommandSpec {
     bool is_inlineable = false;
 };
 
-class ServiceLocator;
 class IExecutionContext;
 struct CoreServices;
 
 /**
- * Explicit services available to a command invocation. New modules should
- * depend on this small port instead of discovering services ad hoc.
+ * Explicit compile-time-checked services available to a module invocation.
+ * Replaces dynamic ServiceLocator lookups with direct ExecutionContext access.
  */
 struct ModuleServices {
-    ServiceLocator& locator;
     CoreServices& core;
     IExecutionContext& execution;
 };
@@ -127,7 +125,7 @@ public:
     virtual std::vector<CommandSpec> get_command_specs() const;
     virtual std::string execute_args_view(std::string_view command,
                                           const std::vector<std::string_view>& args,
-                                          ServiceLocator& locator) = 0;
+                                          ModuleServices& services) = 0;
 };
 
 /**
@@ -219,10 +217,10 @@ public:
     virtual std::string name() const = 0;
 
     /// 初始化模块，在注册后调用一次
-    virtual void initialize(ServiceLocator& /*locator*/) {}
+    virtual void initialize(ModuleServices& /*services*/) {}
 
     /// 注册模块提供的服务（供核心 CoreServices 使用）
-    virtual void register_services(CoreServices& /*services*/, ServiceLocator& /*locator*/) {}
+    virtual void register_services(CoreServices& /*services*/, IExecutionContext& /*execution*/) {}
 
     /// 查询模块提供的扩展服务接口
     virtual void* query_service(const std::string& service_name) {
@@ -237,25 +235,17 @@ public:
 
     std::string execute_args_view(std::string_view command,
                                   const std::vector<std::string_view>& args,
-                                  ServiceLocator& locator) override {
+                                  ModuleServices& services) override {
         std::string cmd(command);
         std::vector<std::string> string_args;
         string_args.reserve(args.size());
         for (auto arg : args) string_args.emplace_back(arg);
-        return execute_args(cmd, string_args, locator);
-    }
-
-    // Explicit dependency entry point. Legacy modules are bridged below until
-    // their command implementations are migrated.
-    virtual std::string execute_args_view(std::string_view command,
-                                           const std::vector<std::string_view>& args,
-                                           ModuleServices& services) {
-        return execute_args_view(command, args, services.locator);
+        return execute_args(cmd, string_args, services);
     }
 
     virtual std::string execute_args(const std::string& /*command*/,
                                      const std::vector<std::string>& /*args*/,
-                                     ServiceLocator& /*locator*/) { return ""; }
+                                     ModuleServices& /*services*/) { return ""; }
 
     bool try_evaluate_implicit(const std::string& /*token*/,
                                StoredValue* /*output*/,
@@ -373,8 +363,8 @@ inline matrix::Matrix extract_matrix(const std::vector<std::string_view>& args,
                                      CoreServices& services) {
     if (index >= args.size()) throw std::runtime_error(std::string(func_name) + " missing argument " + std::to_string(index + 1));
     StoredValue sv = services.parse_matrix_argument(std::string(args[index]), std::string(func_name));
-    if (!sv.matrix_ptr) throw std::runtime_error(std::string(func_name) + " argument is not a matrix");
-    return *sv.matrix_ptr;
+    if (!sv.get_matrix_ptr()) throw std::runtime_error(std::string(func_name) + " argument is not a matrix");
+    return *sv.get_matrix_ptr();
 }
 
 /**

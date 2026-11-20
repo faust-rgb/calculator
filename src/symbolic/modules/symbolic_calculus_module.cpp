@@ -1,6 +1,5 @@
 #include "symbolic/modules/symbolic_calculus_module.h"
 #include "symbolic/modules/commands/symbolic_commands_internal.h"
-#include "core/services/service_locator.h"
 #include "core/services/string_utils.h"
 #include "analysis/calculus/function_analysis.h"
 
@@ -8,26 +7,26 @@ namespace symbolic_commands {
 
 std::string SymbolicCalculusModule::execute_args(const std::string& command,
                                                   const std::vector<std::string>& args,
-                                                  ServiceLocator& locator) {
-    auto services = locator.resolve<CoreServices>();
+                                                  ModuleServices& module_services) {
+    auto* services = &module_services.core;
 
     SymbolicCommandContext ctx;
-    ctx.resolve_symbolic = [&locator](const std::string& a, bool r, std::string* v, SymbolicExpression* e) {
-        locator.resolve<CoreServices>()->symbolic.resolve_symbolic(a, r, v, e);
+    ctx.resolve_symbolic = [services](const std::string& a, bool r, std::string* v, SymbolicExpression* e) {
+        services->symbolic.resolve_symbolic(a, r, v, e);
     };
     ctx.parse_symbolic_variable_arguments = [services](const std::vector<std::string>& a, std::size_t s, const std::vector<std::string>& f) {
         return services->parse_symbolic_vars(a, s, f);
     };
-    ctx.parse_symbolic_expression_list = [&locator](const std::string& a) {
-        return parse_symbolic_expression_list(a, [&locator](const std::string& arg) {
+    ctx.parse_symbolic_expression_list = [services](const std::string& a) {
+        return parse_symbolic_expression_list(a, [services](const std::string& arg) {
             SymbolicExpression expr; std::string var;
-            locator.resolve<CoreServices>()->symbolic.resolve_symbolic(arg, false, &var, &expr);
+            services->symbolic.resolve_symbolic(arg, false, &var, &expr);
             return expr.to_string();
         });
     };
-    ctx.build_analysis = [&locator, services](const std::string& a) {
+    ctx.build_analysis = [services](const std::string& a) {
         SymbolicExpression expr; std::string var;
-        locator.resolve<CoreServices>()->symbolic.resolve_symbolic(a, false, &var, &expr);
+        services->symbolic.resolve_symbolic(a, false, &var, &expr);
         FunctionAnalysis analysis(var);
         analysis.define(expr.to_string());
         analysis.set_evaluator(services->evaluation.build_decimal_evaluator(expr.to_string()));

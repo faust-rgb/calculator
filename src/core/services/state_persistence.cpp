@@ -92,29 +92,29 @@ std::string StatePersistenceService::save_state(const std::string& path) const {
 
     // 保存变量
     for (const auto& [name, value] : all_vars) {
-        if (value.is_matrix) {
+        if (value.is_matrix()) {
             out << "VAR\t" << encode_field(name)
-                << "\tMATRIX\t" << value.matrix_ptr->rows
-                << '\t' << value.matrix_ptr->cols;
-            for (Scalar element : value.matrix_ptr->data) {
+                << "\tMATRIX\t" << value.get_matrix_ptr()->rows
+                << '\t' << value.get_matrix_ptr()->cols;
+            for (Scalar element : value.get_matrix_ptr()->data) {
                 out << '\t' << std::setprecision(17) << element;
             }
             out << '\n';
-        } else if (value.is_complex) {
+        } else if (value.is_complex()) {
             out << "VAR\t" << encode_field(name)
-                << "\tCOMPLEX\t" << std::setprecision(17) << value.complex.real()
-                << '\t' << std::setprecision(17) << value.complex.imag() << '\n';
-        } else if (value.is_string) {
+                << "\tCOMPLEX\t" << std::setprecision(17) << value.get_complex().real()
+                << '\t' << std::setprecision(17) << value.get_complex().imag() << '\n';
+        } else if (value.is_string()) {
             out << "VAR\t" << encode_field(name)
-                << "\tSTRING\t" << encode_field(value.string_value) << '\n';
+                << "\tSTRING\t" << encode_field(value.get_string_value()) << '\n';
         } else if (value.exact) {
             out << "VAR\t" << encode_field(name)
                 << "\tEXACT\t" << value.rational.numerator
                 << '\t' << value.rational.denominator
-                << '\t' << std::setprecision(17) << value.decimal << '\n';
+                << '\t' << std::setprecision(17) << value.get_decimal() << '\n';
         } else {
             out << "VAR\t" << encode_field(name)
-                << "\tDECIMAL\t" << std::setprecision(17) << value.decimal << '\n';
+                << "\tDECIMAL\t" << std::setprecision(17) << value.get_decimal() << '\n';
         }
         if (value.has_precise_decimal_text) {
             out << "PRECISE\t" << encode_field(name)
@@ -230,8 +230,7 @@ std::string StatePersistenceService::load_state(const std::string& path) {
                     if (parts.size() != 4) {
                         throw std::runtime_error("invalid save file format");
                     }
-                    value.is_string = true;
-                    value.string_value = decode_field(parts[3]);
+                    value.set_string_value(decode_field(parts[3]));
                 } else if (parts[2] == "MATRIX" && state_version >= 4) {
                     if (parts.size() < 5) {
                         throw std::runtime_error("invalid save file format");
@@ -243,18 +242,16 @@ std::string StatePersistenceService::load_state(const std::string& path) {
                     if (parts.size() != rows * cols + 5) {
                         throw std::runtime_error("invalid save file format");
                     }
-                    value.is_matrix = true;
-                    value.matrix_ptr = std::make_shared<matrix::Matrix>(rows, cols, 0.0L);
-                    for (std::size_t i = 0; i < value.matrix_ptr->data.size(); ++i) {
-                        value.matrix_ptr->data[i] = Scalar(parts[i + 5]);
+                    value.set_matrix_ptr(std::make_shared<matrix::Matrix>(rows, cols, 0.0L));
+                    for (std::size_t i = 0; i < value.get_matrix_ptr()->data.size(); ++i) {
+                        value.get_matrix_ptr()->data[i] = Scalar(parts[i + 5]);
                     }
                 } else if (parts[2] == "COMPLEX" && state_version >= 5) {
                     if (parts.size() != 5) {
                         throw std::runtime_error("invalid save file format");
                     }
-                    value.is_complex = true;
-                    value.complex.real(Scalar(parts[3]));
-                    value.complex.imag(Scalar(parts[4]));
+                    value.get_complex().real(Scalar(parts[3]));
+                    value.get_complex().imag(Scalar(parts[4]));
                 } else if (parts[2] == "EXACT") {
                     if (parts.size() != 6) {
                         throw std::runtime_error("invalid save file format");
@@ -265,7 +262,7 @@ std::string StatePersistenceService::load_state(const std::string& path) {
                         (state_version >= 3 && parts.size() != 4)) {
                         throw std::runtime_error("invalid save file format");
                     }
-                    value.decimal = Scalar(parts[3]);
+                    value.set_decimal(Scalar(parts[3]));
                     if (state_version == 2 && parts.size() == 5) {
                         value.has_precise_decimal_text = true;
                         value.precise_decimal_text = decode_field(parts[4]);
@@ -283,8 +280,8 @@ std::string StatePersistenceService::load_state(const std::string& path) {
                 }
                 const std::string name = decode_field(parts[1]);
                 auto it = loaded.find(name);
-                if (it == loaded.end() || it->second.is_matrix || it->second.is_complex ||
-                    it->second.is_string) {
+                if (it == loaded.end() || it->second.is_matrix() || it->second.is_complex() ||
+                    it->second.is_string()) {
                     throw std::runtime_error("invalid save file format");
                 }
                 it->second.has_precise_decimal_text = true;
@@ -298,8 +295,8 @@ std::string StatePersistenceService::load_state(const std::string& path) {
                 }
                 const std::string name = decode_field(parts[1]);
                 auto it = loaded.find(name);
-                if (it == loaded.end() || it->second.is_matrix || it->second.is_complex ||
-                    it->second.is_string) {
+                if (it == loaded.end() || it->second.is_matrix() || it->second.is_complex() ||
+                    it->second.is_string()) {
                     throw std::runtime_error("invalid save file format");
                 }
                 it->second.has_symbolic_text = true;

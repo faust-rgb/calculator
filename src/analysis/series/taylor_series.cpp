@@ -246,7 +246,7 @@ bool compute_taylor_coefficients_ad(const SeriesContext& ctx,
     Scalar f0 = Scalar(0);
     try {
         f0 = Scalar(ctx.evaluate_at(expression, variable_name, center));
-    } catch (...) {
+    } catch (const std::exception&) {
         return false;
     }
     if (!mymath::isfinite(f0)) return false;
@@ -264,7 +264,7 @@ bool compute_taylor_coefficients_ad(const SeriesContext& ctx,
             Scalar val = Scalar(0);
             try {
                 val = Scalar(ctx.evaluate_at(expression, variable_name, x.to_long_double()));
-            } catch (...) {
+            } catch (const std::exception&) {
                 return Scalar(mymath::quiet_nan());
             }
             if (!mymath::isfinite(val)) {

@@ -571,7 +571,7 @@ bool numerical_infinite_sum(const SeriesContext& ctx,
     Scalar lower_val = 0.0L;
     try {
         lower_val = ctx.parse_decimal(lower);
-    } catch (...) {
+    } catch (const std::exception&) {
         lower_val = 1.0L;
     }
 
@@ -593,7 +593,7 @@ bool numerical_infinite_sum(const SeriesContext& ctx,
         Scalar term = 0.0L;
         try {
             term = ctx.evaluate_at(summand, index_name, idx);
-        } catch (...) {
+        } catch (const std::exception&) {
             break;
         }
 

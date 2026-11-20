@@ -5,6 +5,8 @@
 #include "test_script_features.h"
 #include "core/api/calculator.h"
 #include <iostream>
+#include <fstream>
+#include <filesystem>
 
 static void test_script_match_case(int& passed, int& failed) {
     Calculator calc;
@@ -469,6 +471,81 @@ print("sum: ", sum)
     }
 }
 
+static void test_system_module_run_file(int& passed, int& failed) {
+    Calculator calc;
+    try {
+        std::filesystem::path temp_file = std::filesystem::temp_directory_path() / "test_run_script_tmp.calc";
+        {
+            std::ofstream ofs(temp_file);
+            ofs << "a = 40 + 2\nprint(\"computed: \", a)\n";
+        }
+        std::string output = calc.process_line(":run " + temp_file.string(), false);
+        std::filesystem::remove(temp_file);
+        if (output.find("computed: 42") != std::string::npos || output.find("42") != std::string::npos) {
+            passed++;
+        } else {
+            std::cout << "FAIL: :run script file output: " << output << "\n";
+            failed++;
+        }
+    } catch (const std::exception& e) {
+        std::cout << "FAIL: :run script file threw: " << e.what() << "\n";
+        failed++;
+    }
+}
+
+static void test_time_module_features(int& passed, int& failed) {
+    Calculator calc;
+    try {
+        std::string out_utc = calc.process_line("utctime()", false);
+        if (!out_utc.empty()) {
+            passed++;
+        } else {
+            std::cout << "FAIL: utctime() output empty\n";
+            failed++;
+        }
+
+        std::string out_fmt = calc.process_line("strftime_utc(\"%Y\")", false);
+        if (!out_fmt.empty()) {
+            passed++;
+        } else {
+            std::cout << "FAIL: strftime_utc output empty\n";
+            failed++;
+        }
+
+        bool caught_inf = false;
+        try {
+            calc.process_line("sleep(inf)", false);
+        } catch (const std::exception&) {
+            caught_inf = true;
+        }
+        if (caught_inf) {
+            passed++;
+        } else {
+            std::cout << "FAIL: sleep(inf) should throw exception\n";
+            failed++;
+        }
+    } catch (const std::exception& e) {
+        std::cout << "FAIL: test_time_module_features threw: " << e.what() << "\n";
+        failed++;
+    }
+}
+
+static void test_transform_module_ztrans_info(int& passed, int& failed) {
+    Calculator calc;
+    try {
+        std::string out_z = calc.process_line("ztrans_info(a^n, n, z)", false);
+        if (out_z.find("condition") != std::string::npos || out_z.find("z") != std::string::npos) {
+            passed++;
+        } else {
+            std::cout << "FAIL: ztrans_info output: " << out_z << "\n";
+            failed++;
+        }
+    } catch (const std::exception& e) {
+        std::cout << "FAIL: ztrans_info threw: " << e.what() << "\n";
+        failed++;
+    }
+}
+
 void run_script_feature_tests(int& passed, int& failed) {
     test_script_match_case(passed, failed);
     test_script_for_in_list(passed, failed);
@@ -480,4 +557,7 @@ void run_script_feature_tests(int& passed, int& failed) {
     test_script_matrix_indexing(passed, failed);
     test_script_advanced_parser_features(passed, failed);
     test_script_loop_accumulation(passed, failed);
+    test_system_module_run_file(passed, failed);
+    test_time_module_features(passed, failed);
+    test_transform_module_ztrans_info(passed, failed);
 }

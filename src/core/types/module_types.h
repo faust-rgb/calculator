@@ -6,7 +6,7 @@
 // 包括：
 // - Scalar 类型别名
 // - StoredValue 类型别名
-// - 前向声明（ServiceLocator, CoreServices 等）
+// - 前向声明（ModuleServices, CoreServices 等）
 //
 // 模块应使用此头文件而不是 calculator_impl.h。
 // ============================================================================
@@ -17,7 +17,6 @@
 #include "core/value/stored_value.h"
 #include "execution/functions/user_function.h"
 #include "types/scalar_type.h"
-#include "core/services/service_locator.h"
 #include "core/services/service_interfaces.h"
 #include <string>
 #include <vector>

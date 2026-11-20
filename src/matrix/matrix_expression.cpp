@@ -56,7 +56,7 @@ bool try_evaluate_expression(const std::string& expression,
             try {
                 *out = StoredValue(scalar_evaluator(name));
                 return true;
-            } catch (...) {
+            } catch (const std::exception&) {
                 return false;
             }
         });
@@ -84,7 +84,7 @@ bool try_evaluate_expression(const std::string& expression,
             if (result.is_matrix()) { *value = Value::from_matrix(result.as_matrix()); return true; }
             if (result.is_complex()) { *value = Value::from_complex(result.as_complex()); return true; }
             if (result.is_scalar()) { *value = Value::from_scalar(result.get_decimal()); return true; }
-        } catch (...) {
+        } catch (const std::exception&) {
             return false;
         }
     }

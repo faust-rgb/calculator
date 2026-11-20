@@ -120,13 +120,11 @@ bool FunctionManager::has_function(const std::string& name) const {
 void FunctionManager::remove_function(const std::string& name) {
     custom_functions_.erase(name);
     script_functions_.erase(name);
-    native_functions_.erase(name);
 }
 
 void FunctionManager::clear_all() {
     custom_functions_.clear();
     script_functions_.clear();
-    native_functions_.clear();
 }
 
 std::vector<std::string> FunctionManager::get_custom_names() const {

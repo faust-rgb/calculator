@@ -1046,8 +1046,14 @@ std::vector<Scalar> StiffODESystemSolver::newton_implicit_system(
         matrix::Matrix g_mat = matrix::Matrix::vector(g);
         matrix::Matrix delta_mat = matrix::solve(A, g_mat);
 
+        Scalar max_delta = Scalar(0);
         for (std::size_t i = 0; i < n; ++i) {
             y[i] -= delta_mat.at(i, 0);
+            max_delta = std::max(max_delta, mymath::abs(Scalar(delta_mat.at(i, 0))));
+        }
+
+        if (max_delta < kNewtonTolerance * std::max(Scalar(1.0L), max_abs_component(y))) {
+            return y;
         }
     }
 

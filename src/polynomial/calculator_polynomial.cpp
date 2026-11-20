@@ -495,13 +495,13 @@ bool handle_polynomial_command(const PolynomialContext& ctx,
  */
 std::string PolynomialModule::execute_args(const std::string& command,
                                           const std::vector<std::string>& args,
-                                          ServiceLocator& locator) {
-    auto services = locator.resolve<CoreServices>();
+                                          ModuleServices& module_services) {
+    auto* services = &module_services.core;
     PolynomialContext ctx;
     ctx.functions = nullptr;
     ctx.resolve_symbolic = [&](const std::string& name, std::string* var) {
         SymbolicExpression expr;
-        locator.resolve<CoreServices>()->symbolic.resolve_symbolic(name, false, var, &expr);
+        services->symbolic.resolve_symbolic(name, false, var, &expr);
         return expr;
     };
 
@@ -533,16 +533,16 @@ std::string PolynomialModule::get_help_snippet(const std::string& topic) const {
 namespace {
 
 std::vector<Scalar> require_poly_vector(const StoredValue& val, const std::string& name) {
-    if (val.is_matrix && val.matrix_ptr) {
+    if (val.is_matrix() && val.get_matrix_ptr()) {
         std::vector<Scalar> result;
-        result.reserve(val.matrix_ptr->data.size());
-        for (const Scalar entry : val.matrix_ptr->data) result.push_back(entry);
+        result.reserve(val.get_matrix_ptr()->data.size());
+        for (const Scalar entry : val.get_matrix_ptr()->data) result.push_back(entry);
         return result;
     }
-    if (val.is_list && val.list_value) {
+    if (val.is_list() && val.get_list_value()) {
         std::vector<Scalar> result;
-        result.reserve(val.list_value->size());
-        for (const auto& item : *val.list_value) {
+        result.reserve(val.get_list_value()->size());
+        for (const auto& item : *val.get_list_value()) {
             result.push_back(item.get_decimal());
         }
         return result;
@@ -552,8 +552,7 @@ std::vector<Scalar> require_poly_vector(const StoredValue& val, const std::strin
 
 StoredValue make_poly_matrix_result(matrix::Matrix m) {
     StoredValue res;
-    res.is_matrix = true;
-    res.matrix_ptr = std::make_shared<matrix::Matrix>(std::move(m));
+    res.set_matrix_ptr(std::make_shared<matrix::Matrix>(std::move(m)));
     return res;
 }
 

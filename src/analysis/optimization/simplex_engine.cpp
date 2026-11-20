@@ -100,7 +100,7 @@ bool reinvert_basis(
     try {
         B_inv = matrix::inverse(B);
         return true;
-    } catch (...) {
+    } catch (const std::exception&) {
         return false;
     }
 }

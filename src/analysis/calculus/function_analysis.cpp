@@ -104,7 +104,7 @@ Scalar compensated_pair_sum(Scalar lhs, Scalar rhs) {
 }
 
 
-Scalar scale_aware_step(Scalar x) {
+[[maybe_unused]] Scalar scale_aware_step(Scalar x) {
     const Scalar scale = std::max(Scalar(static_cast<long long>(1)), mymath::abs(x));
     return kDerivativeBaseStep_v() * scale;
 }
@@ -729,7 +729,7 @@ SymbolicLimitProbeKind probe_symbolic_value_at(
         }
         return value > 0.0L ? SymbolicLimitProbeKind::kPositiveInfinity
                            : SymbolicLimitProbeKind::kNegativeInfinity;
-    } catch (...) {
+    } catch (const std::exception&) {
         return SymbolicLimitProbeKind::kUnknown;
     }
 }
@@ -880,7 +880,7 @@ bool try_symbolic_lhopital_limit(const SymbolicExpression& expression,
                 info.coefficient = Scalar(ex.leading_coefficient);
                 info.valid = true;
                 return info;
-            } catch (...) {
+            } catch (const std::exception&) {
             }
             return info;
         };
@@ -902,7 +902,7 @@ bool try_symbolic_lhopital_limit(const SymbolicExpression& expression,
                 try {
                     *result = handle_pole_limit(res_degree, res_coeff, direction);
                     return true;
-                } catch (...) {
+                } catch (const std::exception&) {
                     return false;
                 }
             }
@@ -1022,13 +1022,13 @@ bool symbolic_limit_at_infinity(const SymbolicExpression& expression,
             if (sub_expr.is_number(&val) && mymath::isfinite(val) && mymath::abs(val) < 1e10) {
                 return false;
             }
-        } catch (...) {
+        } catch (const std::exception&) {
         }
 
         try {
             *result = handle_pole_limit(e.shift, Scalar(e.leading_coefficient), 1);
             return true;
-        } catch (...) {
+        } catch (const std::exception&) {
         }
     }
 
@@ -1140,39 +1140,72 @@ Scalar FunctionAnalysis::derivative(Scalar x) const {
         kLayers = 4;  // double 保持原样
     }
 
-    // 计算曲率以确定步长
-    const Scalar curvature_sample_step = scale * Scalar(1e-3L);
-    const Scalar curvature_probe = evaluate_with_variable(x + curvature_sample_step) -
-                                   Scalar(2.0L) * center +
-                                   evaluate_with_variable(x - curvature_sample_step);
-    const Scalar curvature_scale =
-        std::max(Scalar(1.0L),
-                 mymath::abs(curvature_probe) /
-                     std::max(Scalar(1e-12L), mymath::abs(center)));
+    // 计算曲率以确定步长（避免越过0点导致负值）
+    Scalar curvature_sample_step = scale * Scalar(1e-3L);
+    if (x > Scalar(0) && x - curvature_sample_step <= Scalar(0)) {
+        curvature_sample_step = x * Scalar(0.5L);
+    }
+    Scalar f_plus_probe = evaluate_with_variable(x + curvature_sample_step);
+    Scalar f_minus_probe = Scalar(0);
+    bool has_minus = true;
+    try {
+        f_minus_probe = evaluate_with_variable(x - curvature_sample_step);
+        if (!mymath::isfinite(f_minus_probe)) has_minus = false;
+    } catch (const std::exception&) {
+        has_minus = false;
+    }
+
+    Scalar curvature_scale = Scalar(1.0L);
+    if (has_minus && mymath::isfinite(f_plus_probe)) {
+        const Scalar curvature_probe = f_plus_probe - Scalar(2.0L) * center + f_minus_probe;
+        curvature_scale =
+            std::max(Scalar(1.0L),
+                     mymath::abs(curvature_probe) /
+                         std::max(Scalar(1e-12L), mymath::abs(center)));
+    }
 
     Scalar base_step = central_difference_step_value(
         scale,
         Scalar(1.0L) / derivative_quarter_power_scale(curvature_scale));
+    if (x > Scalar(0) && x - base_step <= Scalar(0)) {
+        base_step = x * Scalar(0.5L);
+    }
 
     Scalar richardson[8][8] = {};  // 最大 8 层
     bool row_valid[8] = {};
     Scalar best_value = Scalar(0.0L);
     Scalar best_error = Scalar(1e300);  // Large number instead of infinity
+    bool forward_only = !has_minus;
 
     for (int row = 0; row < kLayers; ++row) {
         const Scalar step = base_step / mymath::pow(Scalar(2.0L), Scalar(static_cast<long long>(row)));
         const Scalar forward_x = x + step;
         const Scalar backward_x = x - step;
-        const Scalar actual_step = (forward_x - backward_x) * Scalar(0.5L);
-        if (actual_step <= Scalar(0.0L)) {
-            continue;
+        Scalar forward = Scalar(0), backward = Scalar(0);
+        bool f_ok = true, b_ok = true;
+        try {
+            forward = evaluate_with_variable(forward_x);
+            if (!mymath::isfinite(forward)) f_ok = false;
+        } catch (const std::exception&) { f_ok = false; }
+        if (!forward_only) {
+            try {
+                backward = evaluate_with_variable(backward_x);
+                if (!mymath::isfinite(backward)) b_ok = false;
+            } catch (const std::exception&) { b_ok = false; }
         }
-        const Scalar forward = evaluate_with_variable(forward_x);
-        const Scalar backward = evaluate_with_variable(backward_x);
-        if (!mymath::isfinite(forward) || !mymath::isfinite(backward)) {
-            continue;
+
+        if (!f_ok) continue;
+
+        if (b_ok && !forward_only) {
+            const Scalar actual_step = (forward_x - backward_x) * Scalar(0.5L);
+            if (actual_step <= Scalar(0.0L)) continue;
+            richardson[row][0] = (forward - backward) / (Scalar(2.0L) * actual_step);
+        } else {
+            // Forward difference when backward is out of domain
+            richardson[row][0] = (forward - center) / step;
+            forward_only = true;
         }
-        richardson[row][0] = (forward - backward) / (Scalar(2.0L) * actual_step);
+
         row_valid[row] = mymath::isfinite(richardson[row][0]);
         if (!row_valid[row]) {
             continue;
@@ -1182,7 +1215,7 @@ Scalar FunctionAnalysis::derivative(Scalar x) const {
                 row_valid[row] = false;
                 break;
             }
-            Scalar factor = mymath::pow(Scalar(4.0L), Scalar(static_cast<long long>(col)));
+            Scalar factor = mymath::pow(forward_only ? Scalar(2.0L) : Scalar(4.0L), Scalar(static_cast<long long>(col)));
             richardson[row][col] =
                 richardson[row][col - 1] +
                 (richardson[row][col - 1] - richardson[row - 1][col - 1]) /
@@ -1211,18 +1244,28 @@ Scalar FunctionAnalysis::derivative(Scalar x) const {
 
     if (best_error < Scalar(1e300)) {
         const Scalar side_step = std::max(Scalar(1e-7L) * scale, base_step / Scalar(64.0L));
-        const Scalar left_value = evaluate_with_variable(x - side_step);
-        const Scalar right_value = evaluate_with_variable(x + side_step);
-        if (!mymath::isfinite(left_value) || !mymath::isfinite(right_value)) {
+        Scalar left_value = Scalar(0), right_value = Scalar(0);
+        bool left_ok = true, right_ok = true;
+        try {
+            left_value = evaluate_with_variable(x - side_step);
+            if (!mymath::isfinite(left_value)) left_ok = false;
+        } catch (const std::exception&) { left_ok = false; }
+        try {
+            right_value = evaluate_with_variable(x + side_step);
+            if (!mymath::isfinite(right_value)) right_ok = false;
+        } catch (const std::exception&) { right_ok = false; }
+
+        if (left_ok && right_ok) {
+            const Scalar left_slope = (center - left_value) / side_step;
+            const Scalar right_slope = (right_value - center) / side_step;
+            const Scalar slope_scale =
+                std::max({Scalar(1.0L), mymath::abs(left_slope), mymath::abs(right_slope), mymath::abs(best_value)});
+            if (mymath::abs(left_slope - right_slope) >
+                std::max(Scalar(1e-4L), Scalar(1e-5L) * slope_scale)) {
+                throw std::runtime_error("derivative does not exist at this point");
+            }
+        } else if (!left_ok && !right_ok) {
             throw std::runtime_error("derivative is undefined at this point");
-        }
-        const Scalar left_slope = (center - left_value) / side_step;
-        const Scalar right_slope = (right_value - center) / side_step;
-        const Scalar slope_scale =
-            std::max({Scalar(1.0L), mymath::abs(left_slope), mymath::abs(right_slope), mymath::abs(best_value)});
-        if (mymath::abs(left_slope - right_slope) >
-            std::max(Scalar(1e-4L), Scalar(1e-5L) * slope_scale)) {
-            throw std::runtime_error("derivative does not exist at this point");
         }
         return best_value;
     }
@@ -1239,7 +1282,7 @@ Scalar FunctionAnalysis::limit(Scalar x, int direction) const {
     SymbolicExpression expr;
     try {
         expr = SymbolicExpression::parse(expression_);
-    } catch (...) {
+    } catch (const std::exception&) {
         return compute_numerical_limit(x, direction);
     }
 
@@ -1261,7 +1304,7 @@ Scalar FunctionAnalysis::limit(Scalar x, int direction) const {
                 try {
                     Scalar lookup_val = variable_lookup_(var_name);
                     return lookup_val;
-                } catch (...) {
+                } catch (const std::exception&) {
                 }
             }
         }
@@ -1289,7 +1332,7 @@ Scalar FunctionAnalysis::limit(Scalar x, int direction) const {
                 return sym_res.value.to_string() == "inf" ? mymath::infinity() : -mymath::infinity();
             }
         }
-    } catch (...) {
+    } catch (const std::exception&) {
     }
 
     if (!mymath::isfinite(x)) {
@@ -1335,7 +1378,7 @@ Scalar FunctionAnalysis::compute_numerical_limit(Scalar x, int direction) const 
         SymbolicExpression expr;
         try {
             expr = SymbolicExpression::parse(expression_);
-        } catch (...) {
+        } catch (const std::exception&) {
             goto direct_computation;
         }
 
@@ -1359,7 +1402,6 @@ Scalar FunctionAnalysis::compute_numerical_limit(Scalar x, int direction) const 
                 if (msg.find("negative") != std::string::npos) return -mymath::infinity();
                 return mymath::infinity();
             }
-        } catch (...) {
         }
     }
 
@@ -1499,13 +1541,13 @@ direct_computation:
         try {
             left = compute_limit_at(x, -1);
             left_ok = true;
-        } catch (...) {
+        } catch (const std::exception&) {
             left_ex = std::current_exception();
         }
         try {
             right = compute_limit_at(x, 1);
             right_ok = true;
-        } catch (...) {
+        } catch (const std::exception&) {
             right_ex = std::current_exception();
         }
 
@@ -1617,12 +1659,12 @@ Scalar FunctionAnalysis::definite_integral(Scalar lower_bound,
     bool right_singular = false;
     try {
         left_singular = !mymath::isfinite(evaluate_with_variable(lower_bound));
-    } catch (...) {
+    } catch (const std::exception&) {
         left_singular = true;
     }
     try {
         right_singular = !mymath::isfinite(evaluate_with_variable(upper_bound));
-    } catch (...) {
+    } catch (const std::exception&) {
         right_singular = true;
     }
 
@@ -1700,7 +1742,7 @@ Scalar FunctionAnalysis::definite_integral(Scalar lower_bound,
         bool eval_ok = true;
         try {
             value = evaluate_with_variable(x);
-        } catch (...) {
+        } catch (const std::exception&) {
             eval_ok = false;
         }
         if (!eval_ok || !mymath::isfinite(value)) {
@@ -1729,7 +1771,7 @@ Scalar FunctionAnalysis::definite_integral(Scalar lower_bound,
         Scalar val;
         try {
             val = evaluate_with_variable(x);
-        } catch (...) {
+        } catch (const std::exception&) {
             suspicious_points.push_back({prev_x, x});
             prev_x = x;
             prev_scan_val = Scalar(static_cast<long long>(0));
@@ -1758,12 +1800,14 @@ Scalar FunctionAnalysis::definite_integral(Scalar lower_bound,
 
     for (const auto& susp : suspicious_points) {
         Scalar l = susp.first, r = susp.second;
+        bool found_singularity = false;
         for (int iter = 0; iter < 30 && (r - l) > Scalar(1e-12L); ++iter) {
             Scalar mid = (l + r) * Scalar(0.5L);
             Scalar mid_val;
             try {
                 mid_val = evaluate_with_variable(mid);
                 if (!mymath::isfinite(mid_val) || mymath::abs(mid_val) > Scalar(1e10)) {
+                    found_singularity = true;
                     r = mid;
                 } else {
                     Scalar left_mid = (l + mid) * Scalar(0.5L);
@@ -1771,18 +1815,21 @@ Scalar FunctionAnalysis::definite_integral(Scalar lower_bound,
                     Scalar left_val = evaluate_with_variable(left_mid);
                     Scalar right_val = evaluate_with_variable(right_mid);
                     if (!mymath::isfinite(left_val) || mymath::abs(left_val) > Scalar(1e10)) {
+                        found_singularity = true;
                         r = mid;
                     } else if (!mymath::isfinite(right_val) || mymath::abs(right_val) > Scalar(1e10)) {
+                        found_singularity = true;
                         l = mid;
                     } else {
                         break;
                     }
                 }
-            } catch (...) {
+            } catch (const std::exception&) {
+                found_singularity = true;
                 r = mid;
             }
         }
-        if ((r - l) < Scalar(1e-6)) {
+        if (found_singularity && (r - l) < Scalar(1e-6)) {
             throw std::runtime_error("potential internal discontinuity detected near x = " +
                                      format_t((l + r) * Scalar(0.5L)));
         }
@@ -1869,7 +1916,7 @@ std::vector<ExtremumPoint> FunctionAnalysis::solve_extrema(Scalar left_bound,
         try {
             *deriv = derivative(x);
             return mymath::isfinite(*deriv);
-        } catch (...) {
+        } catch (const std::exception&) {
             return false;
         }
     };
@@ -2004,15 +2051,42 @@ Scalar FunctionAnalysis::evaluate_with_variable(Scalar x) const {
 
 
 Scalar FunctionAnalysis::second_derivative(Scalar x) const {
-    const Scalar step = scale_aware_step(x);
+    const Scalar scale = std::max(Scalar(1.0L), mymath::abs(x));
+    const Scalar step = std::max(precision::sqrt_epsilon<Scalar>(), Scalar(1e-5L)) * scale;
     const Scalar center = evaluate_with_variable(x);
-    const Scalar left_x = x - step;
-    const Scalar right_x = x + step;
-    const Scalar actual_step = (right_x - left_x) * Scalar(0.5L);
-    const Scalar left = evaluate_with_variable(left_x);
-    const Scalar right = evaluate_with_variable(right_x);
-    const Scalar numerator = compensated_pair_sum(left - center, right - center);
-    return numerator / (actual_step * actual_step);
+    if (!mymath::isfinite(center)) {
+        throw std::runtime_error("second derivative is undefined at this point");
+    }
+    Scalar f_p1 = Scalar(0), f_m1 = Scalar(0), f_p2 = Scalar(0), f_m2 = Scalar(0);
+    bool p1_ok = true, m1_ok = true, p2_ok = true, m2_ok = true;
+    try {
+        f_p1 = evaluate_with_variable(x + step);
+        if (!mymath::isfinite(f_p1)) p1_ok = false;
+    } catch (const std::exception&) { p1_ok = false; }
+    try {
+        f_m1 = evaluate_with_variable(x - step);
+        if (!mymath::isfinite(f_m1)) m1_ok = false;
+    } catch (const std::exception&) { m1_ok = false; }
+    try {
+        f_p2 = evaluate_with_variable(x + Scalar(2.0L) * step);
+        if (!mymath::isfinite(f_p2)) p2_ok = false;
+    } catch (const std::exception&) { p2_ok = false; }
+    try {
+        f_m2 = evaluate_with_variable(x - Scalar(2.0L) * step);
+        if (!mymath::isfinite(f_m2)) m2_ok = false;
+    } catch (const std::exception&) { m2_ok = false; }
+
+    if (p1_ok && m1_ok && p2_ok && m2_ok) {
+        // 4th-order central difference for 2nd derivative:
+        // (-f(x+2h) + 16f(x+h) - 30f(x) + 16f(x-h) - f(x-2h)) / (12 h^2)
+        const Scalar num = -f_p2 + Scalar(16.0L) * f_p1 - Scalar(30.0L) * center + Scalar(16.0L) * f_m1 - f_m2;
+        return num / (Scalar(12.0L) * step * step);
+    }
+    if (p1_ok && m1_ok) {
+        const Scalar numerator = compensated_pair_sum(f_m1 - center, f_p1 - center);
+        return numerator / (step * step);
+    }
+    throw std::runtime_error("second derivative is undefined at this point");
 }
 
 
@@ -2021,7 +2095,7 @@ Scalar FunctionAnalysis::bisect_stationary_point(Scalar left, Scalar right) cons
         try {
             *d = derivative(x);
             return mymath::isfinite(*d);
-        } catch (...) {
+        } catch (const std::exception&) {
             return false;
         }
     };

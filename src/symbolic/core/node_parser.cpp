@@ -1133,7 +1133,7 @@ int latex_node_precedence(const std::shared_ptr<SymbolicExpression::Node>& node)
 }
 
 // 递归生成 LaTeX 文本
-std::string to_latex_rec(const std::shared_ptr<SymbolicExpression::Node>& node, int parent_prec, bool is_right) {
+std::string to_latex_rec(const std::shared_ptr<SymbolicExpression::Node>& node, int parent_prec, [[maybe_unused]] bool is_right) {
     if (!node) return "";
 
     switch (node->type) {
@@ -1590,8 +1590,10 @@ SymbolicExpression SymbolicExpression::simplify() const {
     static constexpr std::size_t kMaxSimplifyCacheSize = 4096;
     static thread_local SymbolicExpressionLruCache cache(kMaxSimplifyCacheSize);
 
-    const std::string key = node_structural_key(node_) + "_assumptions_" +
-                            std::to_string(symbolic_assumptions::AssumptionEngine::instance().revision());
+    const auto& engine = symbolic_assumptions::AssumptionEngine::instance();
+    const std::string key = node_structural_key(node_) + "_eng_" +
+                            std::to_string(reinterpret_cast<std::uintptr_t>(&engine)) +
+                            "_assumptions_" + std::to_string(engine.revision());
     SymbolicExpression cached;
     if (cache.get(key, &cached)) {
         return cached;
@@ -1645,9 +1647,10 @@ SymbolicExpression SymbolicExpression::simplify_with_budget(std::size_t max_node
     static constexpr std::size_t kMaxSimplifyCacheSize = 4096;
     static thread_local SymbolicExpressionLruCache cache(kMaxSimplifyCacheSize);
 
+    const auto& engine = symbolic_assumptions::AssumptionEngine::instance();
     const std::string key = node_structural_key(node_) + "_budget_" + std::to_string(max_nodes) +
-                            "_assumptions_" +
-                            std::to_string(symbolic_assumptions::AssumptionEngine::instance().revision());
+                            "_eng_" + std::to_string(reinterpret_cast<std::uintptr_t>(&engine)) +
+                            "_assumptions_" + std::to_string(engine.revision());
     SymbolicExpression cached;
     if (cache.get(key, &cached)) {
         return cached;

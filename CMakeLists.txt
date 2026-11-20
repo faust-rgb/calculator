@@ -9,7 +9,9 @@ project(Calculator VERSION 1.0.0 LANGUAGES CXX)
 set(CMAKE_CXX_STANDARD 23)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
-set(CMAKE_BUILD_TYPE Release)
+if(NOT CMAKE_BUILD_TYPE AND NOT CMAKE_CONFIGURATION_TYPES)
+    set(CMAKE_BUILD_TYPE Release CACHE STRING "Build type (Debug, Release, RelWithDebInfo, MinSizeRel)" FORCE)
+endif()
 
 # Compiler flags
 if(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
@@ -25,16 +27,22 @@ if(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
     # Architecture-specific optimizations for high-precision math
     include(CheckCXXCompilerFlag)
 
-    # AVX2 support for SIMD optimizations
-    check_cxx_compiler_flag("-mavx2" COMPILER_SUPPORTS_AVX2)
-    if(COMPILER_SUPPORTS_AVX2)
-        add_compile_options(-mavx2)
-    endif()
+    option(ENABLE_SIMD "Enable AVX2/SSE4.2/FMA SIMD flags when supported by compiler" ON)
+    if(ENABLE_SIMD)
+        check_cxx_compiler_flag("-mavx2" COMPILER_SUPPORTS_AVX2)
+        if(COMPILER_SUPPORTS_AVX2)
+            add_compile_options(-mavx2)
+        endif()
 
-    # SSE4.2 support
-    check_cxx_compiler_flag("-msse4.2" COMPILER_SUPPORTS_SSE42)
-    if(COMPILER_SUPPORTS_SSE42)
-        add_compile_options(-msse4.2)
+        check_cxx_compiler_flag("-msse4.2" COMPILER_SUPPORTS_SSE42)
+        if(COMPILER_SUPPORTS_SSE42)
+            add_compile_options(-msse4.2)
+        endif()
+
+        check_cxx_compiler_flag("-mfma" COMPILER_SUPPORTS_FMA)
+        if(COMPILER_SUPPORTS_FMA)
+            add_compile_options(-mfma)
+        endif()
     endif()
 
     # Native architecture optimization (optional, can be disabled)
@@ -47,41 +55,36 @@ endif()
 # Source directories
 set(SRC_DIR ${CMAKE_SOURCE_DIR}/src)
 
-# Collect all subdirectories under src/ for includes
-file(GLOB SRC_SUBDIRS LIST_DIRECTORIES true ${SRC_DIR}/*)
-foreach(subdir ${SRC_SUBDIRS})
-    if(IS_DIRECTORY ${subdir})
-        list(APPEND INCLUDE_DIRS ${subdir})
-        file(GLOB SUBSUBDIRS LIST_DIRECTORIES true ${subdir}/*)
-        foreach(subsubdir ${SUBSUBDIRS})
-            if(IS_DIRECTORY ${subsubdir})
-                list(APPEND INCLUDE_DIRS ${subsubdir})
-            endif()
-        endforeach()
+# Collect all subdirectories recursively under src/ for includes
+file(GLOB_RECURSE SRC_ALL_ITEMS LIST_DIRECTORIES true CONFIGURE_DEPENDS ${SRC_DIR}/*)
+set(INCLUDE_DIRS ${SRC_DIR})
+foreach(item ${SRC_ALL_ITEMS})
+    if(IS_DIRECTORY ${item})
+        list(APPEND INCLUDE_DIRS ${item})
     endif()
 endforeach()
-list(APPEND INCLUDE_DIRS ${SRC_DIR})
 list(REMOVE_DUPLICATES INCLUDE_DIRS)
 
 # ============================================================================
 # Modular Component Sources
 # ============================================================================
 
-file(GLOB_RECURSE TYPES_SOURCES ${SRC_DIR}/types/*.cpp)
-file(GLOB_RECURSE MATH_SOURCES ${SRC_DIR}/math/*.cpp)
-file(GLOB_RECURSE MATRIX_SOURCES ${SRC_DIR}/matrix/*.cpp)
-file(GLOB_RECURSE POLYNOMIAL_SOURCES ${SRC_DIR}/polynomial/*.cpp)
-file(GLOB_RECURSE STATISTICS_SOURCES ${SRC_DIR}/statistics/*.cpp)
-file(GLOB_RECURSE DSP_SOURCES ${SRC_DIR}/dsp/*.cpp)
-file(GLOB_RECURSE SYMBOLIC_SOURCES ${SRC_DIR}/symbolic/*.cpp)
-file(GLOB_RECURSE ANALYSIS_SOURCES ${SRC_DIR}/analysis/*.cpp)
-file(GLOB_RECURSE PARSER_SOURCES ${SRC_DIR}/parser/*.cpp)
-file(GLOB_RECURSE EXECUTION_SOURCES ${SRC_DIR}/execution/*.cpp)
-file(GLOB_RECURSE IO_SOURCES ${SRC_DIR}/io/*.cpp)
-file(GLOB_RECURSE PLOT_SOURCES ${SRC_DIR}/plot/*.cpp)
-file(GLOB_RECURSE TIME_SOURCES ${SRC_DIR}/time/*.cpp)
-file(GLOB_RECURSE MODULE_SOURCES ${SRC_DIR}/module/*.cpp)
-file(GLOB_RECURSE CORE_SOURCES ${SRC_DIR}/core/*.cpp)
+file(GLOB_RECURSE TYPES_SOURCES CONFIGURE_DEPENDS ${SRC_DIR}/types/*.cpp)
+file(GLOB_RECURSE MATH_SOURCES CONFIGURE_DEPENDS ${SRC_DIR}/math/*.cpp)
+file(GLOB_RECURSE MATRIX_SOURCES CONFIGURE_DEPENDS ${SRC_DIR}/matrix/*.cpp)
+file(GLOB_RECURSE POLYNOMIAL_SOURCES CONFIGURE_DEPENDS ${SRC_DIR}/polynomial/*.cpp)
+file(GLOB_RECURSE STATISTICS_SOURCES CONFIGURE_DEPENDS ${SRC_DIR}/statistics/*.cpp)
+file(GLOB_RECURSE DSP_SOURCES CONFIGURE_DEPENDS ${SRC_DIR}/dsp/*.cpp)
+file(GLOB_RECURSE SYMBOLIC_SOURCES CONFIGURE_DEPENDS ${SRC_DIR}/symbolic/*.cpp)
+file(GLOB_RECURSE ANALYSIS_SOURCES CONFIGURE_DEPENDS ${SRC_DIR}/analysis/*.cpp)
+file(GLOB_RECURSE PARSER_SOURCES CONFIGURE_DEPENDS ${SRC_DIR}/parser/*.cpp)
+file(GLOB_RECURSE EXECUTION_SOURCES CONFIGURE_DEPENDS ${SRC_DIR}/execution/*.cpp)
+file(GLOB_RECURSE IO_SOURCES CONFIGURE_DEPENDS ${SRC_DIR}/io/*.cpp)
+file(GLOB_RECURSE PLOT_SOURCES CONFIGURE_DEPENDS ${SRC_DIR}/plot/*.cpp)
+file(GLOB_RECURSE TIME_SOURCES CONFIGURE_DEPENDS ${SRC_DIR}/time/*.cpp)
+file(GLOB_RECURSE UNITS_SOURCES CONFIGURE_DEPENDS ${SRC_DIR}/units/*.cpp)
+file(GLOB_RECURSE MODULE_SOURCES CONFIGURE_DEPENDS ${SRC_DIR}/module/*.cpp)
+file(GLOB_RECURSE CORE_SOURCES CONFIGURE_DEPENDS ${SRC_DIR}/core/*.cpp)
 
 # Common Calculator Engine Library (Modular Static Target)
 add_library(calc_core STATIC
@@ -98,6 +101,7 @@ add_library(calc_core STATIC
     ${IO_SOURCES}
     ${PLOT_SOURCES}
     ${TIME_SOURCES}
+    ${UNITS_SOURCES}
     ${MODULE_SOURCES}
     ${CORE_SOURCES}
 )
@@ -163,6 +167,13 @@ if(BUILD_TESTS)
     add_test(NAME UnitTests.Math COMMAND calculator_tests -s math)
     add_test(NAME UnitTests.System COMMAND calculator_tests -s system)
     add_test(NAME Benchmark.All COMMAND calculator_tests --benchmark)
+    add_test(
+        NAME ScriptTests.SymbolicCLI
+        COMMAND bash ${CMAKE_SOURCE_DIR}/test/script/run_symbolic_cli_validation.sh
+    )
+    set_tests_properties(ScriptTests.SymbolicCLI PROPERTIES
+        ENVIRONMENT "CALCULATOR_BIN=$<TARGET_FILE:calculator>"
+    )
 endif()
 
 # Install targets (optional)

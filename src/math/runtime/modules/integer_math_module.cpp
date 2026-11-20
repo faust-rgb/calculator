@@ -10,7 +10,7 @@
 
 #include "integer_math_module.h"
 #include "core/services/core_manager_interfaces.h"
-#include "core/services/service_locator.h"
+#include "execution/engine/script_context.h"
 #include "math/functions/integer/integer_helpers.h"
 #include "math/functions/special/special_functions.h"
 #include "math/functions/integer/bitwise_helpers.h"
@@ -52,9 +52,9 @@ auto wrap_scalar(std::function<Scalar(const std::vector<Scalar>&)> f,
                             " argument(s)");
         std::vector<Scalar> sa;
         sa.reserve(args.size());
-        for (const auto& a : args) sa.push_back(a.decimal);
+        for (const auto& a : args) sa.push_back(a.get_decimal());
         StoredValue sv;
-        sv.decimal = f(sa);
+        sv.set_decimal(f(sa));
         return sv;
     };
 }
@@ -72,9 +72,9 @@ auto wrap_scalar(std::function<Scalar(const std::vector<Scalar>&)> f,
  */
 std::string IntegerMathModule::execute_args_view(std::string_view command,
                                           const std::vector<std::string_view>& args,
-                                          ServiceLocator& locator) {
+                                          ModuleServices& module_services) {
     using namespace module_helpers;
-    auto& services = *locator.resolve<CoreServices>();
+    auto& services = module_services.core;
 
     if (command == "factor") {
         require_args_count(args, 1, 1, command);
@@ -99,9 +99,9 @@ std::string IntegerMathModule::execute_args_view(std::string_view command,
         if (base < 2 || base > 36) throw std::runtime_error("base must be in range [2, 36]");
 
         // 获取 hex 格式配置
-        auto config = locator.resolve<IConfigManager>();
-        bool uppercase = config->is_hex_uppercase_mode();
-        bool prefix = config->is_hex_prefix_mode();
+        auto& config = module_services.execution.config();
+        bool uppercase = config.is_hex_uppercase_mode();
+        bool prefix = config.is_hex_prefix_mode();
 
         long long n = require_integer(value, "value", std::string(command));
         return convert_to_base(n, base, uppercase, prefix);
@@ -229,7 +229,7 @@ IntegerMathModule::get_functions_map() const {
     }, "reverse_bits", 1, 1);
 
     funcs["divisors"] = [](const std::vector<StoredValue>& args) -> StoredValue {
-        if (args.size() != 1 || args[0].is_matrix || args[0].is_complex) {
+        if (args.size() != 1 || args[0].is_matrix() || args[0].is_complex()) {
             throw std::runtime_error("divisors expects one integer");
         }
         const Scalar raw = args[0].get_decimal();
@@ -243,13 +243,12 @@ IntegerMathModule::get_functions_map() const {
         }
         std::sort(values.begin(), values.end());
         StoredValue res;
-        res.is_matrix = true;
-        res.matrix_ptr = std::make_shared<matrix::Matrix>(matrix::Matrix::vector(std::move(values)));
+        res.set_matrix_ptr(std::make_shared<matrix::Matrix>(matrix::Matrix::vector(std::move(values))));
         return res;
     };
     funcs["extended_gcd"] = [](const std::vector<StoredValue>& args) -> StoredValue {
-        if (args.size() != 2 || args[0].is_matrix || args[1].is_matrix ||
-            args[0].is_complex || args[1].is_complex) {
+        if (args.size() != 2 || args[0].is_matrix() || args[1].is_matrix() ||
+            args[0].is_complex() || args[1].is_complex()) {
             throw std::runtime_error("extended_gcd expects two integers");
         }
         if (!mymath::is_integer(args[0].get_decimal()) || !mymath::is_integer(args[1].get_decimal())) {
@@ -265,8 +264,7 @@ IntegerMathModule::get_functions_map() const {
             std::tie(old_t, t) = std::make_pair(t, old_t - q * t);
         }
         StoredValue res;
-        res.is_matrix = true;
-        res.matrix_ptr = std::make_shared<matrix::Matrix>(matrix::Matrix::vector({Scalar(old_r), Scalar(old_s), Scalar(old_t)}));
+        res.set_matrix_ptr(std::make_shared<matrix::Matrix>(matrix::Matrix::vector({Scalar(old_r), Scalar(old_s), Scalar(old_t)})));
         return res;
     };
     funcs["xgcd"] = funcs["extended_gcd"];

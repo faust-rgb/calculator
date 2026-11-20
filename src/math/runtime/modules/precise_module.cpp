@@ -161,7 +161,7 @@ StoredValue execute_precise_decimal_expression(
         std::move(result_text),
         max_precise_fraction_digits(expression, variables));
     StoredValue value;
-    value.decimal = Scalar(result_text); // Convert PreciseDecimal to float128_t via string
+    value.set_decimal(Scalar(result_text)); // Convert PreciseDecimal to float128_t via string
     value.precise_decimal_text = result_text;
     value.precise_decimal_value = std::make_shared<PreciseDecimal>(result);
     value.has_precise_decimal_text = true;

@@ -47,6 +47,8 @@ TEST_REPORT.md
 TEST_REPORT_COMPREHENSIVE.md
 bin/
 build/
+build_make/
+Testing/
 
 # CMake build directories
 cmake_build/

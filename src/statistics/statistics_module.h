@@ -20,7 +20,6 @@
 #include <sstream>
 #include <span>
 
-class ServiceLocator;
 
 /**
  * @brief 统计模块类
@@ -46,6 +45,10 @@ public:
      */
     std::string name() const override { return "Statistics"; }
 
+    std::vector<std::string> get_commands() const override {
+        return {"describe", "stat_summary"};
+    }
+
     /**
      * @brief 执行统计命令
      *
@@ -53,7 +56,7 @@ public:
      */
     std::string execute_args(const std::string& command,
                         const std::vector<std::string>& args,
-                        ServiceLocator& locator) override;
+                        ModuleServices& module_services) override;
 
     /**
      * @brief 获取模块提供的原生函数映射

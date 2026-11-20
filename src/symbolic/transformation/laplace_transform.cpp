@@ -1240,7 +1240,7 @@ SymbolicExpression laplace_transform_impl_uncached(
         if (rule.matcher && rule.transformer && rule.matcher(simplified, time_variable)) {
             try {
                 return rule.transformer(simplified, time_variable, transform_variable).simplify();
-            } catch (...) {}
+            } catch (const std::exception&) {}
         }
     }
 
@@ -1754,7 +1754,7 @@ SymbolicExpression inverse_laplace_transform_impl_uncached(
         if (rule.matcher && rule.transformer && rule.matcher(simplified, transform_variable)) {
             try {
                 return rule.transformer(simplified, transform_variable, time_variable).simplify();
-            } catch (...) {}
+            } catch (const std::exception&) {}
         }
     }
 

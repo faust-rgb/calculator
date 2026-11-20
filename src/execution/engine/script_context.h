@@ -17,6 +17,7 @@ class IVariableManager;
 class IFunctionManager;
 class IConfigManager;
 class ICommandRegistry;
+class IStatePersistence;
 struct CoreServices;
 struct StoredValue;
 
@@ -60,6 +61,8 @@ public:
 
     virtual ICommandRegistry& commands() = 0;
     virtual const ICommandRegistry& commands() const = 0;
+
+    virtual IStatePersistence& state_persistence() = 0;
 
     virtual const CoreServices& services() const = 0;
 

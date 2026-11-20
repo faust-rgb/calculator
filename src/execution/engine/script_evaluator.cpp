@@ -37,7 +37,14 @@ StoredValue evaluate_range_list(
     };
     Scalar start = 0.0L, stop = 0.0L, step = 1.0L;
     if (args.size() == 1) {
-        stop = eval_scalar(args[0]);
+        StoredValue first_val = evaluate_script_value_expression(ctx, args[0], exact_mode);
+        if (first_val.is_matrix() || first_val.is_list()) {
+            std::string expr = "range(" + args_text + ")";
+            if (auto ast = compile_expression_ast(expr)) {
+                return core::evaluate_unified_ast(ast.get(), ctx->core_context());
+            }
+        }
+        stop = stored_to_index(first_val, "range argument");
     } else if (args.size() == 2) {
         start = eval_scalar(args[0]);
         stop = eval_scalar(args[1]);
@@ -78,14 +85,14 @@ StoredValue evaluate_list_comprehension(
     }
 
     StoredValue iterable = evaluate_script_value_expression(ctx, iterable_expr, exact_mode);
-    if (!iterable.is_list || !iterable.list_value) {
+    if (!iterable.is_list() || !iterable.get_list_value()) {
         throw std::runtime_error("list comprehension requires a list iterable");
     }
 
     std::vector<StoredValue> result;
     ctx->variables().push_scope();
     try {
-        for (const StoredValue& item : *iterable.list_value) {
+        for (const StoredValue& item : *iterable.get_list_value()) {
             ctx->variables().set_local(var, item);
             if (!filter_expr.empty() &&
                 !truthy_value(evaluate_script_value_expression(ctx, filter_expr, exact_mode))) {
@@ -155,9 +162,9 @@ StoredValue evaluate_index_or_slice(
         throw std::runtime_error("invalid index expression");
     }
     StoredValue base = evaluate_script_value_expression(ctx, base_expr, exact_mode);
-    if (base.is_list) {
-        if (!base.list_value) throw std::runtime_error("invalid list value");
-        const auto& list = *base.list_value;
+    if (base.is_list()) {
+        if (!base.get_list_value()) throw std::runtime_error("invalid list value");
+        const auto& list = *base.get_list_value();
         const std::vector<std::string> slice_parts = split_script_top_level(index_expr, ':');
         if (slice_parts.size() > 1) {
             if (slice_parts.size() > 3) throw std::runtime_error("slice expects start:stop[:step]");
@@ -187,30 +194,30 @@ StoredValue evaluate_index_or_slice(
         if (index < 0 || index >= static_cast<long long>(list.size())) throw std::runtime_error("list index out of range");
         return list[static_cast<std::size_t>(index)];
     }
-    if (base.is_dict) {
-        if (!base.dict_value) throw std::runtime_error("invalid dictionary value");
+    if (base.is_dict()) {
+        if (!base.get_dict_value()) throw std::runtime_error("invalid dictionary value");
         const std::string key = stored_to_key(evaluate_script_value_expression(ctx, index_expr, exact_mode));
-        auto it = base.dict_value->find(key);
-        if (it == base.dict_value->end()) throw std::runtime_error("dictionary key not found: " + key);
+        auto it = base.get_dict_value()->find(key);
+        if (it == base.get_dict_value()->end()) throw std::runtime_error("dictionary key not found: " + key);
         return it->second;
     }
-    if (base.is_matrix) {
-        if (!base.matrix_ptr) throw std::runtime_error("invalid matrix value");
+    if (base.is_matrix()) {
+        if (!base.get_matrix_ptr()) throw std::runtime_error("invalid matrix value");
         const std::vector<std::string> parts = split_script_top_level(index_expr, ',');
         if (parts.size() == 1) {
             long long index = stored_to_index(evaluate_script_value_expression(ctx, parts[0], exact_mode), "matrix index");
-            if (index < 0) index += static_cast<long long>(base.matrix_ptr->data.size());
-            if (index < 0 || index >= static_cast<long long>(base.matrix_ptr->data.size())) throw std::runtime_error("matrix index out of range");
-            return StoredValue(base.matrix_ptr->data[static_cast<std::size_t>(index)]);
+            if (index < 0) index += static_cast<long long>(base.get_matrix_ptr()->data.size());
+            if (index < 0 || index >= static_cast<long long>(base.get_matrix_ptr()->data.size())) throw std::runtime_error("matrix index out of range");
+            return StoredValue(base.get_matrix_ptr()->data[static_cast<std::size_t>(index)]);
         } else if (parts.size() == 2) {
             long long row = stored_to_index(evaluate_script_value_expression(ctx, parts[0], exact_mode), "matrix row");
             long long col = stored_to_index(evaluate_script_value_expression(ctx, parts[1], exact_mode), "matrix col");
-            if (row < 0) row += static_cast<long long>(base.matrix_ptr->rows);
-            if (col < 0) col += static_cast<long long>(base.matrix_ptr->cols);
-            if (row < 0 || row >= static_cast<long long>(base.matrix_ptr->rows) || col < 0 || col >= static_cast<long long>(base.matrix_ptr->cols)) {
+            if (row < 0) row += static_cast<long long>(base.get_matrix_ptr()->rows);
+            if (col < 0) col += static_cast<long long>(base.get_matrix_ptr()->cols);
+            if (row < 0 || row >= static_cast<long long>(base.get_matrix_ptr()->rows) || col < 0 || col >= static_cast<long long>(base.get_matrix_ptr()->cols)) {
                 throw std::runtime_error("matrix index out of range");
             }
-            return StoredValue(base.matrix_ptr->at(static_cast<std::size_t>(row), static_cast<std::size_t>(col)));
+            return StoredValue(base.get_matrix_ptr()->at(static_cast<std::size_t>(row), static_cast<std::size_t>(col)));
         } else {
             throw std::runtime_error("matrix indexing requires 1 or 2 indices");
         }
@@ -229,12 +236,12 @@ StoredValue evaluate_script_value_expression(
         if (arg.empty()) throw std::runtime_error("len() requires one argument");
         StoredValue value = evaluate_script_value_expression(ctx, arg, exact_mode);
         StoredValue result(Scalar(0.0L));
-        if (value.is_list && value.list_value) {
-            result.decimal = Scalar(static_cast<long long>(value.list_value->size()));
-        } else if (value.is_dict && value.dict_value) {
-            result.decimal = Scalar(static_cast<long long>(value.dict_value->size()));
-        } else if (value.is_string) {
-            result.decimal = Scalar(static_cast<long long>(value.string_value.size()));
+        if (value.is_list() && value.get_list_value()) {
+            result.set_decimal(Scalar(static_cast<long long>(value.get_list_value()->size())));
+        } else if (value.is_dict() && value.get_dict_value()) {
+            result.set_decimal(Scalar(static_cast<long long>(value.get_dict_value()->size())));
+        } else if (value.is_string()) {
+            result.set_decimal(Scalar(static_cast<long long>(value.get_string_value().size())));
         } else {
             throw std::runtime_error("len() requires a list, dict, or string");
         }
@@ -250,9 +257,9 @@ StoredValue evaluate_script_value_expression(
         std::vector<std::string> args = split_script_top_level(args_text, ',');
         if (args.size() != 2) throw std::runtime_error("append() requires two arguments: list and element");
         StoredValue list_val = evaluate_script_value_expression(ctx, args[0], exact_mode);
-        if (!list_val.is_list || !list_val.list_value) throw std::runtime_error("append() first argument must be a list");
+        if (!list_val.is_list() || !list_val.get_list_value()) throw std::runtime_error("append() first argument must be a list");
         StoredValue elem = evaluate_script_value_expression(ctx, args[1], exact_mode);
-        std::vector<StoredValue> new_list = *list_val.list_value;
+        std::vector<StoredValue> new_list = *list_val.get_list_value();
         new_list.push_back(elem);
         return make_list_value(std::move(new_list));
     }
@@ -309,10 +316,10 @@ bool try_execute_index_assignment(
     StoredValue base_value = *opt_val;
 
     StoredValue new_value = evaluate_script_value_expression(ctx, value_expr, exact_mode);
-    if (base_value.is_list) {
-        if (!base_value.list_value) base_value.list_value = std::make_shared<std::vector<StoredValue>>();
+    if (base_value.is_list()) {
+        if (!base_value.get_list_value()) base_value.set_list_value(std::make_shared<std::vector<StoredValue>>());
         long long index = stored_to_index(evaluate_script_value_expression(ctx, index_expr, exact_mode), "list index");
-        auto& list = *base_value.list_value;
+        auto& list = *base_value.get_list_value();
         if (index < 0) index += static_cast<long long>(list.size());
         if (index < 0 || index >= static_cast<long long>(list.size())) throw std::runtime_error("list index out of range");
         list[static_cast<std::size_t>(index)] = new_value;
@@ -320,38 +327,38 @@ bool try_execute_index_assignment(
         ctx->variables().assign_visible(base_name, base_value);
         return true;
     }
-    if (base_value.is_dict) {
-        if (!base_value.dict_value) base_value.dict_value = std::make_shared<std::map<std::string, StoredValue>>();
+    if (base_value.is_dict()) {
+        if (!base_value.get_dict_value()) base_value.set_dict_value(std::make_shared<std::map<std::string, StoredValue>>());
         const std::string key = stored_to_key(evaluate_script_value_expression(ctx, index_expr, exact_mode));
-        (*base_value.dict_value)[key] = new_value;
+        (*base_value.get_dict_value())[key] = new_value;
         *output = base_name + "[" + index_expr + "] = " + format_stored_value(new_value, ctx->config().is_symbolic_constants_mode());
         ctx->variables().assign_visible(base_name, base_value);
         return true;
     }
-    if (base_value.is_matrix) {
-        if (!base_value.matrix_ptr) throw std::runtime_error("invalid matrix value");
-        if (new_value.is_matrix || new_value.is_list || new_value.is_dict || new_value.is_string) {
+    if (base_value.is_matrix()) {
+        if (!base_value.get_matrix_ptr()) throw std::runtime_error("invalid matrix value");
+        if (new_value.is_matrix() || new_value.is_list() || new_value.is_dict() || new_value.is_string()) {
             throw std::runtime_error("matrix element assignment requires a scalar value");
         }
         Scalar val = new_value.get_decimal();
         const std::vector<std::string> parts = split_script_top_level(index_expr, ',');
         if (parts.size() == 1) {
             long long index = stored_to_index(evaluate_script_value_expression(ctx, parts[0], exact_mode), "matrix index");
-            if (index < 0) index += static_cast<long long>(base_value.matrix_ptr->data.size());
-            if (index < 0 || index >= static_cast<long long>(base_value.matrix_ptr->data.size())) throw std::runtime_error("matrix index out of range");
-            base_value.matrix_ptr->data[static_cast<std::size_t>(index)] = val;
+            if (index < 0) index += static_cast<long long>(base_value.get_matrix_ptr()->data.size());
+            if (index < 0 || index >= static_cast<long long>(base_value.get_matrix_ptr()->data.size())) throw std::runtime_error("matrix index out of range");
+            base_value.get_matrix_ptr()->data[static_cast<std::size_t>(index)] = val;
             *output = base_name + "[" + index_expr + "] = " + format_stored_value(new_value, ctx->config().is_symbolic_constants_mode());
             ctx->variables().assign_visible(base_name, base_value);
             return true;
         } else if (parts.size() == 2) {
             long long row = stored_to_index(evaluate_script_value_expression(ctx, parts[0], exact_mode), "matrix row");
             long long col = stored_to_index(evaluate_script_value_expression(ctx, parts[1], exact_mode), "matrix col");
-            if (row < 0) row += static_cast<long long>(base_value.matrix_ptr->rows);
-            if (col < 0) col += static_cast<long long>(base_value.matrix_ptr->cols);
-            if (row < 0 || row >= static_cast<long long>(base_value.matrix_ptr->rows) || col < 0 || col >= static_cast<long long>(base_value.matrix_ptr->cols)) {
+            if (row < 0) row += static_cast<long long>(base_value.get_matrix_ptr()->rows);
+            if (col < 0) col += static_cast<long long>(base_value.get_matrix_ptr()->cols);
+            if (row < 0 || row >= static_cast<long long>(base_value.get_matrix_ptr()->rows) || col < 0 || col >= static_cast<long long>(base_value.get_matrix_ptr()->cols)) {
                 throw std::runtime_error("matrix index out of range");
             }
-            base_value.matrix_ptr->at(static_cast<std::size_t>(row), static_cast<std::size_t>(col)) = val;
+            base_value.get_matrix_ptr()->at(static_cast<std::size_t>(row), static_cast<std::size_t>(col)) = val;
             *output = base_name + "[" + index_expr + "] = " + format_stored_value(new_value, ctx->config().is_symbolic_constants_mode());
             ctx->variables().assign_visible(base_name, base_value);
             return true;
@@ -379,11 +386,11 @@ bool execute_index_assignment_direct(
         index_expr_str += std::string(indices[i].text);
     }
 
-    if (base_value.is_list) {
-        if (!base_value.list_value) base_value.list_value = std::make_shared<std::vector<StoredValue>>();
+    if (base_value.is_list()) {
+        if (!base_value.get_list_value()) base_value.set_list_value(std::make_shared<std::vector<StoredValue>>());
         if (indices.empty()) throw std::runtime_error("missing index for list");
         long long index = stored_to_index(evaluate_script_value_expression(ctx, std::string(indices[0].text), exact_mode), "list index");
-        auto& list = *base_value.list_value;
+        auto& list = *base_value.get_list_value();
         if (index < 0) index += static_cast<long long>(list.size());
         if (index < 0 || index >= static_cast<long long>(list.size())) throw std::runtime_error("list index out of range");
         list[static_cast<std::size_t>(index)] = new_value;
@@ -391,38 +398,38 @@ bool execute_index_assignment_direct(
         ctx->variables().assign_visible(base_name, base_value);
         return true;
     }
-    if (base_value.is_dict) {
-        if (!base_value.dict_value) base_value.dict_value = std::make_shared<std::map<std::string, StoredValue>>();
+    if (base_value.is_dict()) {
+        if (!base_value.get_dict_value()) base_value.set_dict_value(std::make_shared<std::map<std::string, StoredValue>>());
         if (indices.empty()) throw std::runtime_error("missing index for dict");
         const std::string key = stored_to_key(evaluate_script_value_expression(ctx, std::string(indices[0].text), exact_mode));
-        (*base_value.dict_value)[key] = new_value;
+        (*base_value.get_dict_value())[key] = new_value;
         if (output) *output = base_name + "[" + index_expr_str + "] = " + format_stored_value(new_value, ctx->config().is_symbolic_constants_mode());
         ctx->variables().assign_visible(base_name, base_value);
         return true;
     }
-    if (base_value.is_matrix) {
-        if (!base_value.matrix_ptr) throw std::runtime_error("invalid matrix value");
-        if (new_value.is_matrix || new_value.is_list || new_value.is_dict || new_value.is_string) {
+    if (base_value.is_matrix()) {
+        if (!base_value.get_matrix_ptr()) throw std::runtime_error("invalid matrix value");
+        if (new_value.is_matrix() || new_value.is_list() || new_value.is_dict() || new_value.is_string()) {
             throw std::runtime_error("matrix element assignment requires a scalar value");
         }
         Scalar val = new_value.get_decimal();
         if (indices.size() == 1) {
             long long index = stored_to_index(evaluate_script_value_expression(ctx, std::string(indices[0].text), exact_mode), "matrix index");
-            if (index < 0) index += static_cast<long long>(base_value.matrix_ptr->data.size());
-            if (index < 0 || index >= static_cast<long long>(base_value.matrix_ptr->data.size())) throw std::runtime_error("matrix index out of range");
-            base_value.matrix_ptr->data[static_cast<std::size_t>(index)] = val;
+            if (index < 0) index += static_cast<long long>(base_value.get_matrix_ptr()->data.size());
+            if (index < 0 || index >= static_cast<long long>(base_value.get_matrix_ptr()->data.size())) throw std::runtime_error("matrix index out of range");
+            base_value.get_matrix_ptr()->data[static_cast<std::size_t>(index)] = val;
             if (output) *output = base_name + "[" + index_expr_str + "] = " + format_stored_value(new_value, ctx->config().is_symbolic_constants_mode());
             ctx->variables().assign_visible(base_name, base_value);
             return true;
         } else if (indices.size() == 2) {
             long long row = stored_to_index(evaluate_script_value_expression(ctx, std::string(indices[0].text), exact_mode), "matrix row");
             long long col = stored_to_index(evaluate_script_value_expression(ctx, std::string(indices[1].text), exact_mode), "matrix col");
-            if (row < 0) row += static_cast<long long>(base_value.matrix_ptr->rows);
-            if (col < 0) col += static_cast<long long>(base_value.matrix_ptr->cols);
-            if (row < 0 || row >= static_cast<long long>(base_value.matrix_ptr->rows) || col < 0 || col >= static_cast<long long>(base_value.matrix_ptr->cols)) {
+            if (row < 0) row += static_cast<long long>(base_value.get_matrix_ptr()->rows);
+            if (col < 0) col += static_cast<long long>(base_value.get_matrix_ptr()->cols);
+            if (row < 0 || row >= static_cast<long long>(base_value.get_matrix_ptr()->rows) || col < 0 || col >= static_cast<long long>(base_value.get_matrix_ptr()->cols)) {
                 throw std::runtime_error("matrix index out of range");
             }
-            base_value.matrix_ptr->at(static_cast<std::size_t>(row), static_cast<std::size_t>(col)) = val;
+            base_value.get_matrix_ptr()->at(static_cast<std::size_t>(row), static_cast<std::size_t>(col)) = val;
             if (output) *output = base_name + "[" + index_expr_str + "] = " + format_stored_value(new_value, ctx->config().is_symbolic_constants_mode());
             ctx->variables().assign_visible(base_name, base_value);
             return true;
@@ -507,7 +514,7 @@ StoredValue evaluate_expression_value(
                 throw;
             }
         }
-    } catch (...) {}
+    } catch (const std::exception&) {}
 
     if (!exact_mode) {
         StoredValue implicit_value;
@@ -535,14 +542,15 @@ StoredValue evaluate_expression_value(
                                    &ctx->core_context());
     StoredValue result = parser.evaluate_stored(target_expr, exact_mode, ctx->config().is_symbolic_constants_mode());
 
-    if (ctx->config().is_symbolic_constants_mode() && !result.has_symbolic_text && !result.is_string() && !result.is_matrix()) {
+    if (ctx->config().is_symbolic_constants_mode() && !result.has_symbolic_text &&
+        !result.is_string() && !result.is_matrix() && !result.is_complex()) {
         std::string symbolic_text;
         if (try_symbolic_constant_expression(target_expr, variables, ctx->functions().get_custom_functions_map(), &symbolic_text)) {
             bool symbolic_text_is_plain_decimal = false;
             try {
                 const Scalar parsed = mymath::scalar_from_string(symbolic_text);
                 symbolic_text_is_plain_decimal = mymath::abs(parsed - result.as_scalar()) < Scalar(1e-12L);
-            } catch (...) { symbolic_text_is_plain_decimal = false; }
+            } catch (const std::exception&) { symbolic_text_is_plain_decimal = false; }
             if (!symbolic_text_is_plain_decimal) {
                 result.has_symbolic_text = true;
                 result.symbolic_text = symbolic_text;

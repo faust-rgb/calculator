@@ -28,7 +28,7 @@ std::function<Scalar(const std::vector<Scalar>&)> make_bound_func(
     try {
         Scalar val = ctx.parse_decimal(bound_expr);
         return [val](const std::vector<Scalar>&) { return val; };
-    } catch (...) {}
+    } catch (const std::exception&) {}
     auto evaluator = ctx.build_scoped_evaluator(bound_expr);
     return [evaluator, var_names](const std::vector<Scalar>& point) {
         std::vector<std::pair<std::string, Scalar>> scope;
@@ -56,7 +56,7 @@ std::function<Scalar(Scalar)> make_1d_derivative_evaluator(
             return [der_eval, var_name](Scalar t) -> Scalar {
                 return der_eval({{var_name, t}});
             };
-        } catch (...) {
+        } catch (const std::exception&) {
         }
     }
     auto eval = ctx.build_scoped_evaluator(expr_str);
@@ -90,7 +90,7 @@ std::function<Scalar(Scalar, Scalar, Scalar)> make_partial_derivative_evaluator(
             return [der_eval, x_var, y_var, z_var](Scalar x, Scalar y, Scalar z) -> Scalar {
                 return der_eval({{x_var, x}, {y_var, y}, {z_var, z}});
             };
-        } catch (...) {
+        } catch (const std::exception&) {
         }
     }
     auto eval = ctx.build_scoped_evaluator(expr_str);
@@ -274,7 +274,8 @@ TheoremResult divergence_theorem(
 
     auto integrand = [&](const std::vector<Scalar>& pt) {
         Scalar u(pt[0]), v(pt[1]);
-        Scalar h = integration_engine::adaptive_derivative_step(u);
+        Scalar hu = integration_engine::adaptive_derivative_step(u);
+        Scalar hv = integration_engine::adaptive_derivative_step(v);
 
         // 计算曲面点
         Scalar x = Scalar(x_eval({{u_var, (u)}, {v_var, (v)}}));
@@ -282,18 +283,18 @@ TheoremResult divergence_theorem(
         Scalar z = Scalar(z_eval({{u_var, (u)}, {v_var, (v)}}));
 
         // 计算偏导数
-        Scalar dx_du = (Scalar(x_eval({{u_var, (u + h)}, {v_var, (v)}})) -
-                        Scalar(x_eval({{u_var, (u - h)}, {v_var, (v)}}))) / (Scalar(2) * h);
-        Scalar dx_dv = (Scalar(x_eval({{u_var, (u)}, {v_var, (v + h)}})) -
-                        Scalar(x_eval({{u_var, (u)}, {v_var, (v - h)}}))) / (Scalar(2) * h);
-        Scalar dy_du = (Scalar(y_eval({{u_var, (u + h)}, {v_var, (v)}})) -
-                        Scalar(y_eval({{u_var, (u - h)}, {v_var, (v)}}))) / (Scalar(2) * h);
-        Scalar dy_dv = (Scalar(y_eval({{u_var, (u)}, {v_var, (v + h)}})) -
-                        Scalar(y_eval({{u_var, (u)}, {v_var, (v - h)}}))) / (Scalar(2) * h);
-        Scalar dz_du = (Scalar(z_eval({{u_var, (u + h)}, {v_var, (v)}})) -
-                        Scalar(z_eval({{u_var, (u - h)}, {v_var, (v)}}))) / (Scalar(2) * h);
-        Scalar dz_dv = (Scalar(z_eval({{u_var, (u)}, {v_var, (v + h)}})) -
-                        Scalar(z_eval({{u_var, (u)}, {v_var, (v - h)}}))) / (Scalar(2) * h);
+        Scalar dx_du = (Scalar(x_eval({{u_var, (u + hu)}, {v_var, (v)}})) -
+                        Scalar(x_eval({{u_var, (u - hu)}, {v_var, (v)}}))) / (Scalar(2) * hu);
+        Scalar dx_dv = (Scalar(x_eval({{u_var, (u)}, {v_var, (v + hv)}})) -
+                        Scalar(x_eval({{u_var, (u)}, {v_var, (v - hv)}}))) / (Scalar(2) * hv);
+        Scalar dy_du = (Scalar(y_eval({{u_var, (u + hu)}, {v_var, (v)}})) -
+                        Scalar(y_eval({{u_var, (u - hu)}, {v_var, (v)}}))) / (Scalar(2) * hu);
+        Scalar dy_dv = (Scalar(y_eval({{u_var, (u)}, {v_var, (v + hv)}})) -
+                        Scalar(y_eval({{u_var, (u)}, {v_var, (v - hv)}}))) / (Scalar(2) * hv);
+        Scalar dz_du = (Scalar(z_eval({{u_var, (u + hu)}, {v_var, (v)}})) -
+                        Scalar(z_eval({{u_var, (u - hu)}, {v_var, (v)}}))) / (Scalar(2) * hu);
+        Scalar dz_dv = (Scalar(z_eval({{u_var, (u)}, {v_var, (v + hv)}})) -
+                        Scalar(z_eval({{u_var, (u)}, {v_var, (v - hv)}}))) / (Scalar(2) * hv);
 
         // 计算法向量 r_u × r_v
         Scalar nx = dy_du * dz_dv - dz_du * dy_dv;
@@ -425,7 +426,8 @@ TheoremResult stokes_theorem(
 
     auto surface_integrand = [&](const std::vector<Scalar>& pt) {
         Scalar u(pt[0]), v(pt[1]);
-        Scalar h = integration_engine::adaptive_derivative_step(u);
+        Scalar hu = integration_engine::adaptive_derivative_step(u);
+        Scalar hv = integration_engine::adaptive_derivative_step(v);
 
         // 计算曲面点
         Scalar x = Scalar(x_eval({{u_var, (u)}, {v_var, (v)}}));
@@ -446,18 +448,18 @@ TheoremResult stokes_theorem(
         Scalar curl_z = dFy_dx - dFx_dy;
 
         // 计算法向量 r_u × r_v
-        Scalar dx_du = (Scalar(x_eval({{u_var, (u + h)}, {v_var, (v)}})) -
-                        Scalar(x_eval({{u_var, (u - h)}, {v_var, (v)}}))) / (Scalar(2) * h);
-        Scalar dx_dv = (Scalar(x_eval({{u_var, (u)}, {v_var, (v + h)}})) -
-                        Scalar(x_eval({{u_var, (u)}, {v_var, (v - h)}}))) / (Scalar(2) * h);
-        Scalar dy_du = (Scalar(y_eval({{u_var, (u + h)}, {v_var, (v)}})) -
-                        Scalar(y_eval({{u_var, (u - h)}, {v_var, (v)}}))) / (Scalar(2) * h);
-        Scalar dy_dv = (Scalar(y_eval({{u_var, (u)}, {v_var, (v + h)}})) -
-                        Scalar(y_eval({{u_var, (u)}, {v_var, (v - h)}}))) / (Scalar(2) * h);
-        Scalar dz_du = (Scalar(z_eval({{u_var, (u + h)}, {v_var, (v)}})) -
-                        Scalar(z_eval({{u_var, (u - h)}, {v_var, (v)}}))) / (Scalar(2) * h);
-        Scalar dz_dv = (Scalar(z_eval({{u_var, (u)}, {v_var, (v + h)}})) -
-                        Scalar(z_eval({{u_var, (u)}, {v_var, (v - h)}}))) / (Scalar(2) * h);
+        Scalar dx_du = (Scalar(x_eval({{u_var, (u + hu)}, {v_var, (v)}})) -
+                        Scalar(x_eval({{u_var, (u - hu)}, {v_var, (v)}}))) / (Scalar(2) * hu);
+        Scalar dx_dv = (Scalar(x_eval({{u_var, (u)}, {v_var, (v + hv)}})) -
+                        Scalar(x_eval({{u_var, (u)}, {v_var, (v - hv)}}))) / (Scalar(2) * hv);
+        Scalar dy_du = (Scalar(y_eval({{u_var, (u + hu)}, {v_var, (v)}})) -
+                        Scalar(y_eval({{u_var, (u - hu)}, {v_var, (v)}}))) / (Scalar(2) * hu);
+        Scalar dy_dv = (Scalar(y_eval({{u_var, (u)}, {v_var, (v + hv)}})) -
+                        Scalar(y_eval({{u_var, (u)}, {v_var, (v - hv)}}))) / (Scalar(2) * hv);
+        Scalar dz_du = (Scalar(z_eval({{u_var, (u + hu)}, {v_var, (v)}})) -
+                        Scalar(z_eval({{u_var, (u - hu)}, {v_var, (v)}}))) / (Scalar(2) * hu);
+        Scalar dz_dv = (Scalar(z_eval({{u_var, (u)}, {v_var, (v + hv)}})) -
+                        Scalar(z_eval({{u_var, (u)}, {v_var, (v - hv)}}))) / (Scalar(2) * hv);
 
         Scalar nx = dy_du * dz_dv - dz_du * dy_dv;
         Scalar ny = dz_du * dx_dv - dx_du * dz_dv;

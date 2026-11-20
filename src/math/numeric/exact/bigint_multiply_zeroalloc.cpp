@@ -16,6 +16,8 @@
 
 #include <algorithm>
 #include <cstring>
+#include <memory>
+#include <vector>
 
 namespace precise {
 
@@ -46,48 +48,52 @@ public:
         // Toom-Cook 递归深度约为 log3(n)，每层需要约 10n 的临时空间
         size_t estimated_depth = 32;  // 最大递归深度
         size_t temp_per_level = max_size * 16;  // 每层临时空间
-        total_size_ = estimated_depth * temp_per_level + max_size * 4;
+        total_size_ = std::max<size_t>(estimated_depth * temp_per_level + max_size * 4, 64);
 
-        buffer_ = new uint32_t[total_size_];
+        buffer_ = std::make_unique<uint32_t[]>(total_size_);
         offset_ = 0;
     }
 
-    ~MultiplyScratchpad() {
-        delete[] buffer_;
-    }
+    ~MultiplyScratchpad() = default;
 
-    // 分配 n 个 uint32_t，返回指针
+    MultiplyScratchpad(const MultiplyScratchpad&) = delete;
+    MultiplyScratchpad& operator=(const MultiplyScratchpad&) = delete;
+    MultiplyScratchpad(MultiplyScratchpad&&) noexcept = default;
+    MultiplyScratchpad& operator=(MultiplyScratchpad&&) noexcept = default;
+
+    // 分配 n 个 uint32_t，返回指针（不释放旧缓冲区，避免递归调用方指针悬空）
     uint32_t* allocate(size_t n) {
-        if (offset_ + n > total_size_) {
-            // 缓冲区不足，扩展（理论上不应该发生）
-            size_t new_size = std::max(total_size_ * 2, offset_ + n);
-            uint32_t* new_buffer = new uint32_t[new_size];
-            std::copy(buffer_, buffer_ + offset_, new_buffer);
-            delete[] buffer_;
-            buffer_ = new_buffer;
-            total_size_ = new_size;
+        if (offset_ + n <= total_size_) {
+            uint32_t* ptr = buffer_.get() + offset_;
+            offset_ += n;
+            return ptr;
         }
-
-        uint32_t* ptr = buffer_ + offset_;
-        offset_ += n;
-        return ptr;
+        // 溢出时追加独立块，保持已有指针全部有效
+        overflow_chunks_.push_back(std::make_unique<uint32_t[]>(n));
+        return overflow_chunks_.back().get();
     }
 
     // 释放最近分配的 n 个元素
     void deallocate(size_t n) {
-        offset_ -= n;
+        if (n <= offset_) {
+            offset_ -= n;
+        } else {
+            offset_ = 0;
+        }
     }
 
     // 重置
     void reset() {
         offset_ = 0;
+        overflow_chunks_.clear();
     }
 
     // 获取当前使用量
     size_t used() const { return offset_; }
 
 private:
-    uint32_t* buffer_;
+    std::unique_ptr<uint32_t[]> buffer_;
+    std::vector<std::unique_ptr<uint32_t[]>> overflow_chunks_;
     size_t offset_;
     size_t total_size_;
 };

@@ -647,7 +647,7 @@ bool evaluate_psa(const SymbolicExpression& expr, const std::string& var_name, S
         }
     } catch (const PoleException&) {
         throw;
-    } catch (...) {
+    } catch (const std::exception&) {
         return false;
     }
 }

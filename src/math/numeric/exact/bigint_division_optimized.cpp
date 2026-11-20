@@ -41,22 +41,40 @@ static inline PreciseDecimal make_power_of_10(int exponent) {
     return result;
 }
 
-// 提取大数的高位尾数及十进制指数（避免极值尺度下的浮点溢出）
+// 提取大数的高位尾数及十进制指数（避免极值尺度下的浮点溢出与大数字符串格式化开销）
 static void extract_mantissa_and_exponent(const BigIntData& data, int scale, long double* out_mantissa, int* out_exponent) {
     if (data.empty() || (data.size() == 1 && data[0] == 0)) {
         *out_mantissa = 0.0L;
         *out_exponent = 0;
         return;
     }
-    std::string digits = bigint_to_string(data);
-    int total_digits = static_cast<int>(digits.size());
+    uint32_t top = data.back();
+    int top_digits = 1;
+    if (top >= 100000000) top_digits = 9;
+    else if (top >= 10000000) top_digits = 8;
+    else if (top >= 1000000) top_digits = 7;
+    else if (top >= 100000) top_digits = 6;
+    else if (top >= 10000) top_digits = 5;
+    else if (top >= 1000) top_digits = 4;
+    else if (top >= 100) top_digits = 3;
+    else if (top >= 10) top_digits = 2;
+
+    int total_digits = static_cast<int>(data.size() - 1) * kBaseDigits + top_digits;
     int exponent = total_digits - 1 - scale;
-    int mantissa_len = std::min<int>(18, total_digits);
-    std::string mantissa_str = digits.substr(0, static_cast<std::size_t>(mantissa_len));
-    long double mantissa = std::stold(mantissa_str);
-    for (int i = 1; i < mantissa_len; ++i) {
-        mantissa /= 10.0L;
+
+    long double mantissa = static_cast<long double>(top);
+    if (data.size() >= 2) {
+        mantissa += static_cast<long double>(data[data.size() - 2]) / static_cast<long double>(kBase);
+        if (data.size() >= 3) {
+            mantissa += static_cast<long double>(data[data.size() - 3]) / (static_cast<long double>(kBase) * static_cast<long double>(kBase));
+        }
     }
+    long double pow_top = 1.0L;
+    for (int i = 1; i < top_digits; ++i) {
+        pow_top *= 10.0L;
+    }
+    mantissa /= pow_top;
+
     *out_mantissa = mantissa;
     *out_exponent = exponent;
 }
@@ -209,20 +227,24 @@ private:
         BigIntData result;
         result.reserve(precision);
 
-        // 提取整数部分
-        if (val < 1.0L) {
-            // 对于小于 1 的数，需要计算 1/val 的精度
-            val = 1.0L / val;
-            // 存储为倒数形式（简化处理）
+        if (!mymath::isfinite(val) || val <= 0.0L) {
+            result.push_back(0);
+            return result;
         }
 
-        // 将 val 转换为整数形式
-        // 乘以足够的 10 的幂次
-        int exponent = static_cast<int>(precision) * kBaseDigits;
-        long double scaled = val * mymath::pow(10.0L, static_cast<long double>(exponent));
+        if (val < 1.0L) {
+            val = 1.0L / val;
+        }
 
-        // 转换为 limbs
-        while (scaled > 0.5L && result.size() < precision) {
+        // 仅提取 long double 所能承载的高位 limbs（最多 2 个 limb 即 18 位）
+        // 避免当 precision 很大时 pow(10, precision * 9) 溢出为 inf
+        size_t initial_limbs = std::min<size_t>(precision, 2);
+        long double scaled = val;
+        for (size_t i = 0; i < initial_limbs; ++i) {
+            scaled *= static_cast<long double>(kBase);
+        }
+
+        while (scaled > 0.5L && result.size() < initial_limbs) {
             long double digit = mymath::fmod(scaled, static_cast<long double>(kBase));
             result.push_back(static_cast<uint32_t>(digit + 0.5L));
             scaled /= kBase;

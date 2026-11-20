@@ -159,7 +159,7 @@ void resolve_symbolic_expression(const SymbolicResolverContext& ctx,
     }
     std::string expanded = ctx.expand_inline(trimmed_argument);
     auto eq_pos = expanded.find('=');
-    if (eq_pos != std::string::npos && (eq_pos == 0 || expanded[eq_pos - 1] != '!' && expanded[eq_pos - 1] != '<' && expanded[eq_pos - 1] != '>') &&
+    if (eq_pos != std::string::npos && (eq_pos == 0 || (expanded[eq_pos - 1] != '!' && expanded[eq_pos - 1] != '<' && expanded[eq_pos - 1] != '>')) &&
         (eq_pos + 1 == expanded.size() || expanded[eq_pos + 1] != '=')) {
         std::string lhs_str = expanded.substr(0, eq_pos);
         std::string rhs_str = expanded.substr(eq_pos + 1);

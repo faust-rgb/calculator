@@ -19,7 +19,6 @@
 #include <map>
 #include <memory>
 
-class ServiceLocator;
 
 /**
  * @class IoModule
@@ -82,7 +81,7 @@ public:
      */
     std::string execute_args(const std::string& command,
                              const std::vector<std::string>& args,
-                             ServiceLocator& locator) override;
+                             ModuleServices& module_services) override;
 
     /**
      * @brief 获取指定主题的帮助信息

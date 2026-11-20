@@ -17,7 +17,6 @@
 #include "analysis/modules/series_module.h"
 #include "execution/engine/script_context.h"
 #include "core/services/core_manager_interfaces.h"
-#include "core/services/service_locator.h"
 #include "analysis/series/psa_engine.h"
 #include "analysis/series/taylor_series.h"
 #include "analysis/series/pade_approximation.h"
@@ -174,20 +173,20 @@ bool handle_series_command(const SeriesContext& ctx,
 
 std::string SeriesModule::execute_args(const std::string& command,
                                       const std::vector<std::string>& args,
-                                      ServiceLocator& locator) {
-    auto services = locator.resolve<CoreServices>();
+                                      ModuleServices& module_services) {
+    auto* services = &module_services.core;
     SeriesContext ctx;
-    ctx.resolve_symbolic = [&locator](const std::string& a, bool r, std::string* v, SymbolicExpression* e) {
-        locator.resolve<CoreServices>()->symbolic.resolve_symbolic(a, r, v, e);
+    ctx.resolve_symbolic = [services](const std::string& a, bool r, std::string* v, SymbolicExpression* e) {
+        services->symbolic.resolve_symbolic(a, r, v, e);
     };
     ctx.parse_decimal = [services](const std::string& a) { return services->evaluation.parse_decimal(a); };
     ctx.evaluate_at = [services](const SymbolicExpression& expr, const std::string& var, Scalar val) {
         return services->evaluation.build_decimal_evaluator(expr.to_string())({{var, val}});
     };
-    ctx.simplify_symbolic = [&locator](const std::string& a) {
+    ctx.simplify_symbolic = [services](const std::string& a) {
         SymbolicExpression expr;
         std::string var;
-        locator.resolve<CoreServices>()->symbolic.resolve_symbolic(a, false, &var, &expr);
+        services->symbolic.resolve_symbolic(a, false, &var, &expr);
         return expr.to_string();
     };
     ctx.expand_inline = [services](const std::string& a) { return services->symbolic.expand_inline(a); };
